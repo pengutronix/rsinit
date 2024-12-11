@@ -126,3 +126,90 @@ pub fn parse_cmdline(cmdline: String, options: &mut CmdlineOptions) -> Result<()
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_regular() {
+        let cmdline = String::from("root=/dev/mmcblk0p1 rw");
+        let mut options = CmdlineOptions {
+            ..Default::default()
+        };
+
+        parse_cmdline(cmdline, &mut options).expect("failed");
+        assert!(options.root.is_some());
+        assert_eq!(options.root.unwrap(), "/dev/mmcblk0p1");
+        assert!(options.rootfstype.is_none());
+        assert!(options.rootflags.is_none());
+        assert_eq!(options.rootfsflags, MsFlags::empty());
+        assert!(options.nfsroot.is_none());
+    }
+
+    #[test]
+    fn test_nfs() {
+        let cmdline = String::from("root=/dev/nfs nfsroot=192.168.42.23:/path/to/nfsroot,v3,tcp ip=dhcp console=ttymxc1,115200n8 rootwait ro");
+        let mut options = CmdlineOptions {
+            ..Default::default()
+        };
+
+        parse_cmdline(cmdline, &mut options).expect("failed");
+        assert!(options.root.is_some());
+        assert_eq!(options.root.unwrap(), "192.168.42.23:/path/to/nfsroot");
+        assert!(options.rootfstype.is_some());
+        assert_eq!(options.rootfstype.unwrap(), "nfs");
+        assert!(options.rootflags.is_some());
+        assert_eq!(
+            options.rootflags.unwrap(),
+            "nolock,v3,tcp,addr=192.168.42.23"
+        );
+        assert_eq!(options.rootfsflags, MsFlags::MS_RDONLY);
+        assert!(options.nfsroot.is_some());
+        assert_eq!(
+            options.nfsroot.unwrap(),
+            "192.168.42.23:/path/to/nfsroot,v3,tcp"
+        );
+    }
+
+    #[test]
+    fn test_9p_qemu() {
+        let cmdline = String::from(
+            "root=/dev/root rootfstype=9p rootflags=trans=virtio console=ttyAMA0,115200",
+        );
+        let mut options = CmdlineOptions {
+            ..Default::default()
+        };
+
+        parse_cmdline(cmdline, &mut options).expect("failed");
+        assert!(options.root.is_some());
+        assert_eq!(options.root.unwrap(), "/dev/root");
+        assert!(options.rootfstype.is_some());
+        assert_eq!(options.rootfstype.unwrap(), "9p");
+        assert!(options.rootflags.is_some());
+        assert_eq!(options.rootflags.unwrap(), "trans=virtio");
+        assert_eq!(options.rootfsflags, MsFlags::MS_RDONLY);
+        assert!(options.nfsroot.is_none());
+    }
+
+    #[test]
+    fn test_9p_usbg() {
+        let cmdline = String::from("root=rootdev rootfstype=9p rootflags=trans=usbg,cache=loose,uname=root,dfltuid=0,dfltgid=0,aname=/path/to/9pfsroot rw");
+        let mut options = CmdlineOptions {
+            ..Default::default()
+        };
+
+        parse_cmdline(cmdline, &mut options).expect("failed");
+        assert!(options.root.is_some());
+        assert_eq!(options.root.unwrap(), "rootdev");
+        assert!(options.rootfstype.is_some());
+        assert_eq!(options.rootfstype.unwrap(), "9p");
+        assert!(options.rootflags.is_some());
+        assert_eq!(
+            options.rootflags.unwrap(),
+            "trans=usbg,cache=loose,uname=root,dfltuid=0,dfltgid=0,aname=/path/to/9pfsroot"
+        );
+        assert_eq!(options.rootfsflags, MsFlags::empty());
+        assert!(options.nfsroot.is_none());
+    }
+}
