@@ -1,78 +1,20 @@
 // SPDX-License-Identifier: GPL-2.0-only
+use cmdline::{parse_cmdline, CmdlineOptions};
 use nix::mount::{mount, MsFlags};
-use nix::unistd::{chdir, chroot, dup2, execv, unlink};
 use nix::sys::termios::tcdrain;
+use nix::unistd::{chdir, chroot, dup2, execv, unlink};
 use std::env::current_exe;
 use std::ffi::CString;
-use std::fs::{create_dir, read_dir, read_to_string, remove_dir, write, OpenOptions};
+use std::fs::{create_dir, read_to_string, remove_dir, OpenOptions};
 use std::io;
 use std::os::fd::{AsFd, AsRawFd, RawFd};
-use std::os::unix::fs::symlink;
 use std::path::Path;
-use std::{thread, time};
-use cmdline::{parse_cmdline, CmdlineOptions};
+use usbg_9pfs::prepare_9pfs_gadget;
 
 mod cmdline;
+mod usbg_9pfs;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-
-fn mkdir(dir: &str) -> Result<()> {
-    create_dir(dir).map_err(|e| format!("Failed to create {dir}: {e}"))?;
-    Ok(())
-}
-
-fn write_file(path: &str, content: &str) -> Result<()> {
-    write(path, content).map_err(|e| format!("Failed to write to {path}: {e}"))?;
-    Ok(())
-}
-
-fn setup_9pfs_gadget(device: &String) -> Result<()> {
-    println!("Initializing USB 9pfs gadget ...");
-
-    let mut udc = String::new();
-    for entry in read_dir("/sys/class/udcx")? {
-        let os_name = entry?.file_name();
-        udc = String::from(os_name.to_str().unwrap());
-        break;
-    }
-    if udc.is_empty() {
-        return Err("No UDC found to attach the 9pfs gadget".into());
-    }
-
-    mkdir("/sys/kernel/config/usb_gadget/9pfs")?;
-
-    write_file("/sys/kernel/config/usb_gadget/9pfs/idVendor", "0x1d6b")?;
-    write_file("/sys/kernel/config/usb_gadget/9pfs/idProduct", "0x0109")?;
-
-    mkdir("/sys/kernel/config/usb_gadget/9pfs/strings/0x409")?;
-    write_file(
-        "/sys/kernel/config/usb_gadget/9pfs/strings/0x409/serialnumber",
-        "01234567",
-    )?;
-    write_file(
-        "/sys/kernel/config/usb_gadget/9pfs/strings/0x409/manufacturer",
-        "Pengutronix e.K.",
-    )?;
-    write_file(
-        "/sys/kernel/config/usb_gadget/9pfs/strings/0x409/product",
-        "9PFS Gadget",
-    )?;
-
-    mkdir("/sys/kernel/config/usb_gadget/9pfs/configs/c.1")?;
-    mkdir("/sys/kernel/config/usb_gadget/9pfs/configs/c.1/strings/0x409")?;
-
-    let function = format!("/sys/kernel/config/usb_gadget/9pfs/functions/usb9pfs.{device}");
-    let link = format!("/sys/kernel/config/usb_gadget/9pfs/configs/c.1/usb9pfs.{device}");
-    mkdir(&function)?;
-    symlink(&function, &link)?;
-
-    println!("Attaching 9pfs gatget to UDC {udc}");
-    write_file("/sys/kernel/config/usb_gadget/9pfs/UDC", &udc)?;
-
-    let d = time::Duration::new(1, 0);
-    thread::sleep(d);
-    Ok(())
-}
 
 /*
  * Setup stdout/stderr. The kernel will create /dev/console in the
@@ -178,16 +120,7 @@ fn mount_special() -> Result<()> {
     };
     parse_cmdline(cmdline, &mut options)?;
 
-    if !options.rootfstype.is_none()
-        && options.rootfstype.as_ref().unwrap() == "9p"
-        && !options.rootflags.is_none()
-        && options.rootflags.as_ref().unwrap().contains("trans=usbg")
-    {
-        if options.root.is_none() {
-            return Err("Missing root= for 9p!".into());
-        }
-        setup_9pfs_gadget(&options.root.as_ref().unwrap())?;
-    }
+    prepare_9pfs_gadget(&options)?;
 
     if options.root.is_none() {
         return Err("root= not found in /proc/cmdline".into());
