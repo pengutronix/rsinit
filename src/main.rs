@@ -34,20 +34,7 @@ fn setup_console() -> Result<()> {
     Ok(())
 }
 
-fn run() -> Result<()> {
-    mount_special(true)?;
-
-    let cmdline = read_to_string("/proc/cmdline")
-        .map_err(|e| format!("Failed to read /proc/cmdline: {e}"))?;
-    let mut options = CmdlineOptions {
-        ..Default::default()
-    };
-    parse_cmdline(cmdline, &mut options)?;
-
-    prepare_9pfs_gadget(&options)?;
-
-    mount_root(&options)?;
-
+fn start_root() -> Result<()> {
     match current_exe() {
         Err(e) => println!("current_exe failed: {e}"),
         Ok(exe) => unlink(exe.as_path())?,
@@ -64,6 +51,24 @@ fn run() -> Result<()> {
         CString::new("/sbin/init").unwrap().as_ref(),
         &[CString::new("/sbin/init").unwrap().as_ref()],
     )?;
+
+    Ok(())
+}
+
+fn run() -> Result<()> {
+    mount_special(true)?;
+
+    let cmdline = read_to_string("/proc/cmdline")
+        .map_err(|e| format!("Failed to read /proc/cmdline: {e}"))?;
+    let mut options = CmdlineOptions {
+        ..Default::default()
+    };
+    parse_cmdline(cmdline, &mut options)?;
+
+    prepare_9pfs_gadget(&options)?;
+
+    mount_root(&options)?;
+    start_root()?;
 
     Ok(())
 }
