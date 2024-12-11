@@ -24,16 +24,25 @@ impl Default for CmdlineOptions {
     }
 }
 
-fn parse_option(key: String, value: Option<String>, options: &mut CmdlineOptions) {
+fn ensure_value(key: String, value: Option<String>) -> Result<Option<String>> {
+    if value.is_none() {
+        Err(format!("Cmdline option '{key}' must have an argument!").into())
+    } else {
+        Ok(value)
+    }
+}
+
+fn parse_option(key: String, value: Option<String>, options: &mut CmdlineOptions) -> Result<()> {
     match key.as_str() {
-        "root" => options.root = value,
-        "rootfstype" => options.rootfstype = value,
+        "root" => options.root = ensure_value(key, value)?,
+        "rootfstype" => options.rootfstype = ensure_value(key, value)?,
         "rootflags" => options.rootflags = value,
         "ro" => options.rootfsflags.insert(MsFlags::MS_RDONLY),
         "rw" => options.rootfsflags.remove(MsFlags::MS_RDONLY),
-        "nfsroot" => options.nfsroot = value,
+        "nfsroot" => options.nfsroot = ensure_value(key, value)?,
         _ => (),
     }
+    Ok(())
 }
 
 fn parse_nfsroot(options: &mut CmdlineOptions) -> Result<()> {
@@ -98,7 +107,7 @@ pub fn parse_cmdline(cmdline: String, options: &mut CmdlineOptions) -> Result<()
             ' ' => {
                 if !quoted {
                     if !key.is_empty() {
-                        parse_option(key, if have_value { Some(value) } else { None }, options);
+                        parse_option(key, if have_value { Some(value) } else { None }, options)?;
                     }
                     key = String::new();
                     value = String::new();
@@ -117,7 +126,7 @@ pub fn parse_cmdline(cmdline: String, options: &mut CmdlineOptions) -> Result<()
         }
     }
     if !key.is_empty() {
-        parse_option(key, if have_value { Some(value) } else { None }, options);
+        parse_option(key, if have_value { Some(value) } else { None }, options)?;
     }
     if !options.root.is_none() && options.root.as_ref().unwrap() == "/dev/nfs"
         || !options.rootfstype.is_none() && options.rootfstype.as_ref().unwrap() == "nfs"
