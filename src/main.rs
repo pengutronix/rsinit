@@ -34,7 +34,7 @@ fn setup_console() -> Result<()> {
     Ok(())
 }
 
-fn start_root() -> Result<()> {
+fn start_root(options: &CmdlineOptions) -> Result<()> {
     match current_exe() {
         Err(e) => println!("current_exe failed: {e}"),
         Ok(exe) => unlink(exe.as_path())?,
@@ -46,11 +46,9 @@ fn start_root() -> Result<()> {
     chroot(".")?;
     chdir("/")?;
 
-    println!("Starting /sbin/init...");
-    execv(
-        CString::new("/sbin/init").unwrap().as_ref(),
-        &[CString::new("/sbin/init").unwrap().as_ref()],
-    )?;
+    println!("Starting {}...", options.init);
+    let init = CString::new(options.init.clone()).unwrap();
+    execv(init.as_ref(), &[init.as_ref()])?;
 
     Ok(())
 }
@@ -68,7 +66,7 @@ fn run() -> Result<()> {
     prepare_9pfs_gadget(&options)?;
 
     mount_root(&options)?;
-    start_root()?;
+    start_root(&options)?;
 
     Ok(())
 }

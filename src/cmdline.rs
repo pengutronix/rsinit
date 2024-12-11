@@ -10,6 +10,7 @@ pub struct CmdlineOptions {
     pub rootflags: Option<String>,
     pub rootfsflags: MsFlags,
     pub nfsroot: Option<String>,
+    pub init: String,
 }
 
 impl Default for CmdlineOptions {
@@ -20,6 +21,7 @@ impl Default for CmdlineOptions {
             rootflags: None,
             rootfsflags: MsFlags::MS_RDONLY,
             nfsroot: None,
+            init: String::from("/sbin/init"),
         }
     }
 }
@@ -40,6 +42,7 @@ fn parse_option(key: String, value: Option<String>, options: &mut CmdlineOptions
         "ro" => options.rootfsflags.insert(MsFlags::MS_RDONLY),
         "rw" => options.rootfsflags.remove(MsFlags::MS_RDONLY),
         "nfsroot" => options.nfsroot = ensure_value(key, value)?,
+        "init" => options.init = ensure_value(key, value)?.unwrap(),
         _ => (),
     }
     Ok(())
