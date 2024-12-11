@@ -116,6 +116,9 @@ pub fn parse_cmdline(cmdline: String, options: &mut CmdlineOptions) -> Result<()
             }
         }
     }
+    if !key.is_empty() {
+        parse_option(key, if have_value { Some(value) } else { None }, options);
+    }
     if !options.root.is_none() && options.root.as_ref().unwrap() == "/dev/nfs"
         || !options.rootfstype.is_none() && options.rootfstype.as_ref().unwrap() == "nfs"
     {
