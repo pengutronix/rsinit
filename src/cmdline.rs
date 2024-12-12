@@ -150,6 +150,7 @@ mod tests {
         assert!(options.rootflags.is_none());
         assert_eq!(options.rootfsflags, MsFlags::empty());
         assert!(options.nfsroot.is_none());
+        assert_eq!(options.init, "/sbin/init");
     }
 
     #[test]
@@ -174,6 +175,7 @@ mod tests {
             options.nfsroot.as_deref(),
             Some("192.168.42.23:/path/to/nfsroot,v3,tcp")
         );
+        assert_eq!(options.init, "/sbin/init");
     }
 
     #[test]
@@ -191,6 +193,7 @@ mod tests {
         assert_eq!(options.rootflags.as_deref(), Some("trans=virtio"));
         assert_eq!(options.rootfsflags, MsFlags::MS_RDONLY);
         assert!(options.nfsroot.is_none());
+        assert_eq!(options.init, "/sbin/init");
     }
 
     #[test]
@@ -209,5 +212,22 @@ mod tests {
         );
         assert_eq!(options.rootfsflags, MsFlags::empty());
         assert!(options.nfsroot.is_none());
+        assert_eq!(options.init, "/sbin/init");
+    }
+
+    #[test]
+    fn test_init() {
+        let cmdline = String::from("root=/dev/mmcblk0p1 init=/bin/sh\n");
+        let mut options = CmdlineOptions {
+            ..Default::default()
+        };
+
+        parse_cmdline(cmdline, &mut options).expect("failed");
+        assert_eq!(options.root.as_deref(), Some("/dev/mmcblk0p1"));
+        assert!(options.rootfstype.is_none());
+        assert!(options.rootflags.is_none());
+        assert_eq!(options.rootfsflags, MsFlags::MS_RDONLY);
+        assert!(options.nfsroot.is_none());
+        assert_eq!(options.init, "/bin/sh");
     }
 }
