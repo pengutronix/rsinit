@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
+use crate::Result;
 use nix::mount::MsFlags;
 use std::fs::read_to_string;
-
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 pub struct CmdlineOptions {
     pub root: Option<String>,

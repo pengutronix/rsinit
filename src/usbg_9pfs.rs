@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 use crate::cmdline::CmdlineOptions;
+use crate::Result;
 use std::fs::{create_dir, read_dir, write};
 use std::os::unix::fs::symlink;
 use std::{thread, time};
-
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 fn mkdir(dir: &str) -> Result<()> {
     create_dir(dir).map_err(|e| format!("Failed to create {dir}: {e}"))?;

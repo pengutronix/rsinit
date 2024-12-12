@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-only
 use crate::cmdline::CmdlineOptions;
+use crate::Result;
 use nix::mount::{mount, MsFlags};
 use std::fs::{create_dir, remove_dir};
 use std::io;
 use std::path::Path;
-
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 fn mount_apivfs(dst: &str, fstype: &str) -> Result<()> {
     if let Err(e) = create_dir(dst) {
