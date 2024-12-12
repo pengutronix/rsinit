@@ -6,13 +6,11 @@ use std::os::unix::fs::symlink;
 use std::{thread, time};
 
 fn mkdir(dir: &str) -> Result<()> {
-    create_dir(dir).map_err(|e| format!("Failed to create {dir}: {e}"))?;
-    Ok(())
+    create_dir(dir).map_err(|e| format!("Failed to create {dir}: {e}").into())
 }
 
 fn write_file<C: AsRef<[u8]>>(path: &str, content: C) -> Result<()> {
-    write(path, content).map_err(|e| format!("Failed to write to {path}: {e}"))?;
-    Ok(())
+    write(path, content).map_err(|e| format!("Failed to write to {path}: {e}").into())
 }
 
 fn setup_9pfs_gadget(device: &String) -> Result<()> {
