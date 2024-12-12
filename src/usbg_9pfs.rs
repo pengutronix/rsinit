@@ -18,17 +18,13 @@ fn write_file<C: AsRef<[u8]>>(path: &str, content: C) -> Result<()> {
 fn setup_9pfs_gadget(device: &String) -> Result<()> {
     println!("Initializing USB 9pfs gadget ...");
 
-    let mut udc = String::new();
-    for entry in
-        read_dir("/sys/class/udc").map_err(|e| format!("Failed to list /sys/class/udc: {e}"))?
-    {
-        let os_name = entry?.file_name();
-        udc = String::from(os_name.to_str().unwrap());
-        break;
-    }
-    if udc.is_empty() {
-        return Err("No UDC found to attach the 9pfs gadget".into());
-    }
+    let udc = read_dir("/sys/class/udc")
+        .map_err(|e| format!("Failed to list /sys/class/udc: {e}"))?
+        .next()
+        .ok_or("No UDC found to attach the 9pfs gadget".to_string())?
+        .map_err(|e| format!("Failed to inspect the first entry in /sys/class/udc: {e}"))?
+        .file_name();
+    let udc = udc.into_string().unwrap();
 
     mkdir("/sys/kernel/config/usb_gadget/9pfs")?;
 
