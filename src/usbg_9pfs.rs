@@ -67,15 +67,15 @@ fn setup_9pfs_gadget(device: &String) -> Result<()> {
 }
 
 pub fn prepare_9pfs_gadget(options: &CmdlineOptions) -> Result<()> {
-    if !options.rootfstype.is_none()
-        && options.rootfstype.as_ref().unwrap() == "9p"
-        && !options.rootflags.is_none()
-        && options.rootflags.as_ref().unwrap().contains("trans=usbg")
+    if options.rootfstype.as_deref() == Some("9p")
+        && options.rootflags.as_deref() == Some("trans=usbg")
     {
-        if options.root.is_none() {
-            return Err("Missing root= for 9p!".into());
+        if let Some(root) = &options.root {
+            setup_9pfs_gadget(root)
+        } else {
+            Err("Missing root= for 9p!".into())
         }
-        setup_9pfs_gadget(&options.root.as_ref().unwrap())?;
+    } else {
+        Ok(())
     }
-    Ok(())
 }

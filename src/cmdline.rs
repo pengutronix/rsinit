@@ -131,9 +131,7 @@ pub fn parse_cmdline(cmdline: String, options: &mut CmdlineOptions) -> Result<()
     if !key.is_empty() {
         parse_option(key, if have_value { Some(value) } else { None }, options)?;
     }
-    if !options.root.is_none() && options.root.as_ref().unwrap() == "/dev/nfs"
-        || !options.rootfstype.is_none() && options.rootfstype.as_ref().unwrap() == "nfs"
-    {
+    if options.root.as_deref() == Some("/dev/nfs") || options.rootfstype.as_deref() == Some("nfs") {
         parse_nfsroot(options)?;
     }
     Ok(())
@@ -151,8 +149,7 @@ mod tests {
         };
 
         parse_cmdline(cmdline, &mut options).expect("failed");
-        assert!(options.root.is_some());
-        assert_eq!(options.root.unwrap(), "/dev/mmcblk0p1");
+        assert_eq!(options.root.as_deref(), Some("/dev/mmcblk0p1"));
         assert!(options.rootfstype.is_none());
         assert!(options.rootflags.is_none());
         assert_eq!(options.rootfsflags, MsFlags::empty());
@@ -167,20 +164,19 @@ mod tests {
         };
 
         parse_cmdline(cmdline, &mut options).expect("failed");
-        assert!(options.root.is_some());
-        assert_eq!(options.root.unwrap(), "192.168.42.23:/path/to/nfsroot");
-        assert!(options.rootfstype.is_some());
-        assert_eq!(options.rootfstype.unwrap(), "nfs");
-        assert!(options.rootflags.is_some());
         assert_eq!(
-            options.rootflags.unwrap(),
-            "nolock,v3,tcp,addr=192.168.42.23"
+            options.root.as_deref(),
+            Some("192.168.42.23:/path/to/nfsroot")
+        );
+        assert_eq!(options.rootfstype.as_deref(), Some("nfs"));
+        assert_eq!(
+            options.rootflags.as_deref(),
+            Some("nolock,v3,tcp,addr=192.168.42.23")
         );
         assert_eq!(options.rootfsflags, MsFlags::MS_RDONLY);
-        assert!(options.nfsroot.is_some());
         assert_eq!(
-            options.nfsroot.unwrap(),
-            "192.168.42.23:/path/to/nfsroot,v3,tcp"
+            options.nfsroot.as_deref(),
+            Some("192.168.42.23:/path/to/nfsroot,v3,tcp")
         );
     }
 
@@ -194,12 +190,9 @@ mod tests {
         };
 
         parse_cmdline(cmdline, &mut options).expect("failed");
-        assert!(options.root.is_some());
-        assert_eq!(options.root.unwrap(), "/dev/root");
-        assert!(options.rootfstype.is_some());
-        assert_eq!(options.rootfstype.unwrap(), "9p");
-        assert!(options.rootflags.is_some());
-        assert_eq!(options.rootflags.unwrap(), "trans=virtio");
+        assert_eq!(options.root.as_deref(), Some("/dev/root"));
+        assert_eq!(options.rootfstype.as_deref(), Some("9p"));
+        assert_eq!(options.rootflags.as_deref(), Some("trans=virtio"));
         assert_eq!(options.rootfsflags, MsFlags::MS_RDONLY);
         assert!(options.nfsroot.is_none());
     }
@@ -212,14 +205,11 @@ mod tests {
         };
 
         parse_cmdline(cmdline, &mut options).expect("failed");
-        assert!(options.root.is_some());
-        assert_eq!(options.root.unwrap(), "rootdev");
-        assert!(options.rootfstype.is_some());
-        assert_eq!(options.rootfstype.unwrap(), "9p");
-        assert!(options.rootflags.is_some());
+        assert_eq!(options.root.as_deref(), Some("rootdev"));
+        assert_eq!(options.rootfstype.as_deref(), Some("9p"));
         assert_eq!(
-            options.rootflags.unwrap(),
-            "trans=usbg,cache=loose,uname=root,dfltuid=0,dfltgid=0,aname=/path/to/9pfsroot"
+            options.rootflags.as_deref(),
+            Some("trans=usbg,cache=loose,uname=root,dfltuid=0,dfltgid=0,aname=/path/to/9pfsroot")
         );
         assert_eq!(options.rootfsflags, MsFlags::empty());
         assert!(options.nfsroot.is_none());
