@@ -10,7 +10,7 @@ fn mkdir(dir: &str) -> Result<()> {
     Ok(())
 }
 
-fn write_file(path: &str, content: &str) -> Result<()> {
+fn write_file<C: AsRef<[u8]>>(path: &str, content: C) -> Result<()> {
     write(path, content).map_err(|e| format!("Failed to write to {path}: {e}"))?;
     Ok(())
 }
