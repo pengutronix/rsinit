@@ -24,7 +24,6 @@ fn setup_9pfs_gadget(device: &String) -> Result<()> {
         .ok_or("No UDC found to attach the 9pfs gadget".to_string())?
         .map_err(|e| format!("Failed to inspect the first entry in /sys/class/udc: {e}"))?
         .file_name();
-    let udc = udc.into_string().unwrap();
 
     mkdir("/sys/kernel/config/usb_gadget/9pfs")?;
 
@@ -53,8 +52,14 @@ fn setup_9pfs_gadget(device: &String) -> Result<()> {
     mkdir(&function)?;
     symlink(&function, &link)?;
 
-    println!("Attaching 9pfs gatget to UDC {udc}");
-    write_file("/sys/kernel/config/usb_gadget/9pfs/UDC", &udc)?;
+    println!(
+        "Attaching 9pfs gatget to UDC {}",
+        udc.to_str().unwrap_or("<invalid utf-8>")
+    );
+    write_file(
+        "/sys/kernel/config/usb_gadget/9pfs/UDC",
+        udc.as_encoded_bytes(),
+    )?;
 
     let d = time::Duration::new(1, 0);
     thread::sleep(d);
