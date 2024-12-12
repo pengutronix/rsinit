@@ -106,7 +106,7 @@ pub fn parse_cmdline(cmdline: String, options: &mut CmdlineOptions) -> Result<()
                 quoted = !quoted;
                 skip = true;
             }
-            ' ' => {
+            ' ' | '\n' => {
                 if !quoted {
                     if !key.is_empty() {
                         parse_option(key, if have_value { Some(value) } else { None }, options)?;
@@ -127,9 +127,6 @@ pub fn parse_cmdline(cmdline: String, options: &mut CmdlineOptions) -> Result<()
             }
         }
     }
-    if !key.is_empty() {
-        parse_option(key, if have_value { Some(value) } else { None }, options)?;
-    }
     if options.root.as_deref() == Some("/dev/nfs") || options.rootfstype.as_deref() == Some("nfs") {
         parse_nfsroot(options)?;
     }
@@ -142,7 +139,7 @@ mod tests {
 
     #[test]
     fn test_regular() {
-        let cmdline = String::from("root=/dev/mmcblk0p1 rw");
+        let cmdline = String::from("root=/dev/mmcblk0p1 rw\n");
         let mut options = CmdlineOptions {
             ..Default::default()
         };
@@ -157,7 +154,7 @@ mod tests {
 
     #[test]
     fn test_nfs() {
-        let cmdline = String::from("root=/dev/nfs nfsroot=192.168.42.23:/path/to/nfsroot,v3,tcp ip=dhcp console=ttymxc1,115200n8 rootwait ro");
+        let cmdline = String::from("root=/dev/nfs nfsroot=192.168.42.23:/path/to/nfsroot,v3,tcp ip=dhcp console=ttymxc1,115200n8 rootwait ro\n");
         let mut options = CmdlineOptions {
             ..Default::default()
         };
@@ -182,7 +179,7 @@ mod tests {
     #[test]
     fn test_9p_qemu() {
         let cmdline = String::from(
-            "root=/dev/root rootfstype=9p rootflags=trans=virtio console=ttyAMA0,115200",
+            "root=/dev/root rootfstype=9p rootflags=trans=virtio console=ttyAMA0,115200\n",
         );
         let mut options = CmdlineOptions {
             ..Default::default()
@@ -198,7 +195,7 @@ mod tests {
 
     #[test]
     fn test_9p_usbg() {
-        let cmdline = String::from("root=rootdev rootfstype=9p rootflags=trans=usbg,cache=loose,uname=root,dfltuid=0,dfltgid=0,aname=/path/to/9pfsroot rw");
+        let cmdline = String::from("root=rootdev rootfstype=9p rootflags=trans=usbg,cache=loose,uname=root,dfltuid=0,dfltgid=0,aname=/path/to/9pfsroot rw\n");
         let mut options = CmdlineOptions {
             ..Default::default()
         };
