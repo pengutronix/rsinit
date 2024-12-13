@@ -103,6 +103,8 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<()> {
         }
     }
 
+    println!("Configuring dm-verity rootfs with root-hash = {root_hash}");
+
     let f = OpenOptions::new()
         .write(true)
         .open("/dev/mapper/control")
