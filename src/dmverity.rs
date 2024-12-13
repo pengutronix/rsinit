@@ -66,16 +66,16 @@ fn init_header(header: &mut DmIoctl, size: u32, flags: u32, uuid: &[u8]) {
     header.uuid[..uuid.len()].copy_from_slice(uuid);
 }
 
-pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<()> {
+pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
     if !Path::new("/verity-params").exists() {
-        return Ok(());
+        return Ok(false);
     }
     if options.root.is_none() {
-        return Ok(());
+        return Ok(false);
     }
     let root_device = options.root.as_ref().unwrap();
     if !Path::new(&root_device).exists() {
-        return Ok(());
+        return Ok(false);
     }
 
     let mut data_blocks = "";
@@ -172,5 +172,5 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<()> {
 
     options.root = Some(format!("/dev/dm-{}", minor(suspend_data.dev)));
 
-    Ok(())
+    Ok(true)
 }

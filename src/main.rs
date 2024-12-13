@@ -60,6 +60,16 @@ fn start_root(options: &CmdlineOptions) -> Result<()> {
     Ok(())
 }
 
+fn prepare_aux(options: &mut CmdlineOptions) -> Result<()> {
+    if prepare_dmverity(options)? {
+        return Ok(());
+    }
+    if prepare_9pfs_gadget(options)? {
+        return Ok(());
+    }
+    Ok(())
+}
+
 fn run() -> Result<()> {
     mount_special(true)?;
 
@@ -69,8 +79,7 @@ fn run() -> Result<()> {
     };
     parse_cmdline(cmdline, &mut options)?;
 
-    prepare_9pfs_gadget(&options)?;
-    prepare_dmverity(&mut options)?;
+    prepare_aux(&mut options)?;
 
     mount_root(&options)?;
     start_root(&options)?;
