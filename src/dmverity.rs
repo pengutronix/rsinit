@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
 use crate::cmdline::CmdlineOptions;
-use crate::Result;
+use crate::{read_file, Result};
 use getrandom::getrandom;
 use nix::ioctl_readwrite;
 use nix::libc::dev_t;
 use nix::sys::stat::minor;
-use std::fs::{read_to_string, OpenOptions};
+use std::fs::OpenOptions;
 use std::mem::size_of;
 use std::os::fd::IntoRawFd;
 use std::path::Path;
@@ -86,7 +86,7 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<()> {
     let mut salt = "";
     let mut root_hash = "";
 
-    let params = read_to_string("/verity-params")?;
+    let params = read_file("/verity-params")?;
     for line in params.lines() {
         match line.split_once('=') {
             None => continue,

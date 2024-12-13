@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
-use crate::Result;
+use crate::{read_file, Result};
 use core::ffi::CStr;
 use nix::mount::MsFlags;
 use std::ffi::CString;
-use std::fs::read_to_string;
 
 pub struct CmdlineOptions {
     pub root: Option<String>,
@@ -67,8 +66,7 @@ fn parse_nfsroot(options: &mut CmdlineOptions) -> Result<()> {
     };
     rootflags.push_str(",addr=");
     if !nfsroot.contains(':') {
-        let pnp = read_to_string("/proc/net/pnp")
-            .map_err(|e| format!("Failed to read /proc/net/pnp: {e}"))?;
+        let pnp = read_file("/proc/net/pnp")?;
         for line in pnp.lines() {
             match line.split_once(' ') {
                 None => continue,

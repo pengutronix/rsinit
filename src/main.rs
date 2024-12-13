@@ -17,6 +17,10 @@ mod usbg_9pfs;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+fn read_file(filename: &str) -> std::result::Result<String, String> {
+    read_to_string(filename).map_err(|e| format!("Failed to read {filename}: {e}"))
+}
+
 /*
  * Setup stdout/stderr. The kernel will create /dev/console in the
  * initramfs, so we can use that.
@@ -59,8 +63,7 @@ fn start_root(options: &CmdlineOptions) -> Result<()> {
 fn run() -> Result<()> {
     mount_special(true)?;
 
-    let cmdline = read_to_string("/proc/cmdline")
-        .map_err(|e| format!("Failed to read /proc/cmdline: {e}"))?;
+    let cmdline = read_file("/proc/cmdline")?;
     let mut options = CmdlineOptions {
         ..Default::default()
     };
