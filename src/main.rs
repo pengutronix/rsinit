@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 use cmdline::{parse_cmdline, CmdlineOptions};
+use dmverity::prepare_dmverity;
 use mount::{mount_move_special, mount_root, mount_special};
 use nix::sys::termios::tcdrain;
 use nix::unistd::{chdir, chroot, dup2, execv, unlink};
@@ -8,7 +9,6 @@ use std::fs::{read_to_string, OpenOptions};
 use std::io;
 use std::os::fd::{AsFd, AsRawFd, RawFd};
 use usbg_9pfs::prepare_9pfs_gadget;
-use dmverity::prepare_dmverity;
 
 mod cmdline;
 mod dmverity;
