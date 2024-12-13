@@ -113,7 +113,7 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<()> {
     init_header(
         &mut create_data,
         u32::try_from(size_of::<DmIoctl>()).unwrap(),
-        DM_READONLY_FLAG,
+        0,
     );
 
     unsafe { dm_dev_create(dm_fd, &mut create_data) }
@@ -145,7 +145,7 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<()> {
     init_header(
         &mut suspend_data,
         u32::try_from(size_of::<DmIoctl>()).unwrap(),
-        DM_READONLY_FLAG,
+        0,
     );
 
     unsafe { dm_dev_suspend(dm_fd, &mut suspend_data) }
