@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 use crate::cmdline::CmdlineOptions;
 use crate::Result;
+use getrandom::getrandom;
 use nix::ioctl_readwrite;
 use nix::libc::dev_t;
 use nix::sys::stat::minor;
@@ -57,13 +58,12 @@ ioctl_readwrite!(dm_dev_create, 0xfd, DM_DEV_CREATE_CMD, DmIoctl);
 ioctl_readwrite!(dm_table_load, 0xfd, DM_TABLE_LOAD_CMD, DmIoctl);
 ioctl_readwrite!(dm_dev_suspend, 0xfd, DM_DEV_SUSPEND_CMD, DmIoctl);
 
-fn init_header(header: &mut DmIoctl, size: u32, flags: u32) {
+fn init_header(header: &mut DmIoctl, size: u32, flags: u32, uuid: &[u8]) {
     header.version[0] = DM_VERSION_MAJOR;
     header.data_size = size;
     header.data_start = u32::try_from(size_of::<DmIoctl>()).unwrap();
     header.flags = flags;
-    let name = "verity\0".as_bytes();
-    header.name[..name.len()].copy_from_slice(name);
+    header.uuid[..uuid.len()].copy_from_slice(uuid);
 }
 
 pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<()> {
@@ -109,12 +109,27 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<()> {
         .map_err(|e| format!("Failed to open /dev/mapper/control: {e}"))?;
     let dm_fd = f.into_raw_fd();
 
+    let mut rand = [0u8; 16];
+    getrandom(&mut rand).unwrap();
+    let mut uuid_str = String::from("rdinit-verity-root-");
+    for x in rand {
+        uuid_str.push_str(format!("{:02x}", x).as_str());
+    }
+    uuid_str.push('-');
+    uuid_str.push_str(root_device.rsplit_once('/').unwrap_or(("", root_device)).1);
+    let len = usize::min(uuid_str.len(), DM_UUID_LEN - 1);
+    let uuid = uuid_str[..len].as_bytes();
+
     let mut create_data: DmIoctl = unsafe { std::mem::zeroed() };
     init_header(
         &mut create_data,
         u32::try_from(size_of::<DmIoctl>()).unwrap(),
         0,
+        uuid,
     );
+
+    let name = "verity-rootfs\0".as_bytes();
+    create_data.name[..name.len()].copy_from_slice(name);
 
     unsafe { dm_dev_create(dm_fd, &mut create_data) }
         .map_err(|e| format!("Failed to create dm device: {e}"))?;
@@ -124,6 +139,7 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<()> {
         &mut table_load_data.header,
         u32::try_from(size_of::<DmTableLoad>()).unwrap(),
         DM_READONLY_FLAG,
+        uuid,
     );
     table_load_data.header.target_count = 1;
     table_load_data.target_spec.status = 0;
@@ -146,6 +162,7 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<()> {
         &mut suspend_data,
         u32::try_from(size_of::<DmIoctl>()).unwrap(),
         0,
+        uuid,
     );
 
     unsafe { dm_dev_suspend(dm_fd, &mut suspend_data) }
