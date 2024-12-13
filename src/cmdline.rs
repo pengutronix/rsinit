@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 use crate::Result;
+use core::ffi::CStr;
 use nix::mount::MsFlags;
+use std::ffi::CString;
 use std::fs::read_to_string;
 
 pub struct CmdlineOptions {
@@ -9,8 +11,10 @@ pub struct CmdlineOptions {
     pub rootflags: Option<String>,
     pub rootfsflags: MsFlags,
     pub nfsroot: Option<String>,
-    pub init: String,
+    pub init: CString,
 }
+
+const SBIN_INIT: &CStr = c"/sbin/init";
 
 impl Default for CmdlineOptions {
     fn default() -> CmdlineOptions {
@@ -20,7 +24,7 @@ impl Default for CmdlineOptions {
             rootflags: None,
             rootfsflags: MsFlags::MS_RDONLY,
             nfsroot: None,
-            init: String::from("/sbin/init"),
+            init: CString::from(SBIN_INIT),
         }
     }
 }
@@ -41,7 +45,7 @@ fn parse_option(key: String, value: Option<String>, options: &mut CmdlineOptions
         "ro" => options.rootfsflags.insert(MsFlags::MS_RDONLY),
         "rw" => options.rootfsflags.remove(MsFlags::MS_RDONLY),
         "nfsroot" => options.nfsroot = ensure_value(key, value)?,
-        "init" => options.init = ensure_value(key, value)?.unwrap(),
+        "init" => options.init = CString::new(ensure_value(key, value)?.unwrap()).unwrap(),
         _ => (),
     }
     Ok(())
@@ -150,7 +154,7 @@ mod tests {
         assert!(options.rootflags.is_none());
         assert_eq!(options.rootfsflags, MsFlags::empty());
         assert!(options.nfsroot.is_none());
-        assert_eq!(options.init, "/sbin/init");
+        assert_eq!(options.init, CString::from(SBIN_INIT));
     }
 
     #[test]
@@ -175,7 +179,7 @@ mod tests {
             options.nfsroot.as_deref(),
             Some("192.168.42.23:/path/to/nfsroot,v3,tcp")
         );
-        assert_eq!(options.init, "/sbin/init");
+        assert_eq!(options.init, CString::from(SBIN_INIT));
     }
 
     #[test]
@@ -193,7 +197,7 @@ mod tests {
         assert_eq!(options.rootflags.as_deref(), Some("trans=virtio"));
         assert_eq!(options.rootfsflags, MsFlags::MS_RDONLY);
         assert!(options.nfsroot.is_none());
-        assert_eq!(options.init, "/sbin/init");
+        assert_eq!(options.init, CString::from(SBIN_INIT));
     }
 
     #[test]
@@ -212,7 +216,7 @@ mod tests {
         );
         assert_eq!(options.rootfsflags, MsFlags::empty());
         assert!(options.nfsroot.is_none());
-        assert_eq!(options.init, "/sbin/init");
+        assert_eq!(options.init, CString::from(SBIN_INIT));
     }
 
     #[test]
@@ -228,6 +232,6 @@ mod tests {
         assert!(options.rootflags.is_none());
         assert_eq!(options.rootfsflags, MsFlags::MS_RDONLY);
         assert!(options.nfsroot.is_none());
-        assert_eq!(options.init, "/bin/sh");
+        assert_eq!(options.init, CString::from(c"/bin/sh"));
     }
 }

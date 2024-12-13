@@ -4,7 +4,6 @@ use mount::{mount_move_special, mount_root, mount_special};
 use nix::sys::termios::tcdrain;
 use nix::unistd::{chdir, chroot, dup2, execv, unlink};
 use std::env::current_exe;
-use std::ffi::CString;
 use std::fs::{read_to_string, OpenOptions};
 use std::io;
 use std::os::fd::{AsFd, AsRawFd, RawFd};
@@ -48,9 +47,11 @@ fn start_root(options: &CmdlineOptions) -> Result<()> {
     chroot(".")?;
     chdir("/")?;
 
-    println!("Starting {}...", options.init);
-    let init = CString::new(options.init.clone()).unwrap();
-    execv(init.as_ref(), &[init.as_ref()])?;
+    println!(
+        "Starting {}...",
+        options.init.to_str().unwrap_or("<invalid utf-8>")
+    );
+    execv(options.init.as_ref(), &[options.init.as_ref()])?;
 
     Ok(())
 }
