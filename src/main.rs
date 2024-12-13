@@ -9,8 +9,10 @@ use std::fs::{read_to_string, OpenOptions};
 use std::io;
 use std::os::fd::{AsFd, AsRawFd, RawFd};
 use usbg_9pfs::prepare_9pfs_gadget;
+use dmverity::prepare_dmverity;
 
 mod cmdline;
+mod dmverity;
 mod mount;
 mod usbg_9pfs;
 
@@ -64,6 +66,7 @@ fn run() -> Result<()> {
     parse_cmdline(cmdline, &mut options)?;
 
     prepare_9pfs_gadget(&options)?;
+    prepare_dmverity(&mut options)?;
 
     mount_root(&options)?;
     start_root(&options)?;
