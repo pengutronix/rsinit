@@ -73,7 +73,7 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<()> {
     if options.root.is_none() {
         return Ok(());
     }
-    let root_device = options.root.clone().unwrap();
+    let root_device = options.root.as_ref().unwrap();
     if !Path::new(&root_device).exists() {
         return Ok(());
     }

@@ -53,9 +53,9 @@ fn mount_rootfs(
     .map_err(|e| {
         format!(
             "Failed to mount {} -> /root ({}, '{}'): {e}",
-            src.clone().unwrap_or_default(),
-            fstype.clone().unwrap_or_default(),
-            args.clone().unwrap_or_default()
+            src.as_ref().unwrap_or(&String::default()),
+            fstype.as_ref().unwrap_or(&String::default()),
+            args.as_ref().unwrap_or(&String::default())
         )
     })?;
 
