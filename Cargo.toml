@@ -18,3 +18,14 @@ systemd = ["nix/reboot"]
 dmverity = ["nix/ioctl"]
 usb9pfs = []
 reboot-on-failure = ["nix/reboot"]
+
+[profile.release]
+opt-level = 'z'
+strip = true
+lto = "fat"
+incremental = false
+codegen-units = 1
+
+[profile.minimal]
+inherits = "release"
+panic = "abort"

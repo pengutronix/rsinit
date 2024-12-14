@@ -1,0 +1,4 @@
+#!/bin/sh
+
+export RUSTFLAGS="-Zfmt-debug=none -C target-feature=+crt-static"
+exec cargo +nightly "${@}" --profile minimal -Z build-std=std,panic_abort -Z build-std-features=panic_immediate_abort
