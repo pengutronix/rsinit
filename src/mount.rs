@@ -53,16 +53,31 @@ pub fn mount_root(options: &CmdlineOptions) -> Result<()> {
     if options.root.is_none() {
         return Err("root= not found in /proc/cmdline".into());
     }
-    mount_rootfs(
-        &options.root,
-        &options.rootfstype,
+
+    if let Err(e) = create_dir("/root") {
+        if e.kind() != io::ErrorKind::AlreadyExists {
+            return Err(format!("Failed to create /root: {e}").into());
+        }
+    }
+
+    println!(
+        "Mounting rootfs {} -> /root ({}, '{}')",
+        options.root.as_deref().unwrap(),
+        options.rootfstype.as_deref().unwrap_or_default(),
+        options.rootflags.as_deref().unwrap_or_default()
+    );
+    do_mount(
+        options.root.as_deref(),
+        "/root",
+        options.rootfstype.as_deref(),
         options.rootfsflags,
-        &options.rootflags,
+        options.rootflags.as_deref(),
     )?;
+
     Ok(())
 }
 
-fn mount_move(src: &str, dst: &str) -> Result<()> {
+fn mount_move(src: &str, dst: &str, cleanup: bool) -> Result<()> {
     mount(
         Some(Path::new(src)),
         dst,
@@ -72,7 +87,9 @@ fn mount_move(src: &str, dst: &str) -> Result<()> {
     )
     .map_err(|e| format!("Failed to move mount {src} -> {dst}: {e}"))?;
 
-    remove_dir(src)?;
+    if cleanup {
+        remove_dir(src)?;
+    }
 
     Ok(())
 }
@@ -87,19 +104,41 @@ pub fn mount_special(mount_config: bool) -> Result<()> {
     Ok(())
 }
 
-pub fn mount_move_special() -> Result<()> {
-    mount_move("/dev", "/root/dev")?;
-    mount_move("/sys", "/root/sys")?;
-    mount_move("/proc", "/root/proc")?;
+pub fn mount_move_special(options: &CmdlineOptions) -> Result<()> {
+    mount_move("/dev", "/root/dev", options.cleanup)?;
+    mount_move("/sys", "/root/sys", options.cleanup)?;
+    mount_move("/proc", "/root/proc", options.cleanup)?;
+    Ok(())
+}
 
-    mount(
-        Some(Path::new("/")),
-        "/root/mnt",
-        Option::<&Path>::None,
+pub fn mount_systemd(options: &mut CmdlineOptions) -> Result<()> {
+    do_mount(
+        Option::<&str>::None,
+        "/root/run",
+        Some("tmpfs"),
+        MsFlags::MS_NODEV
+            .union(MsFlags::MS_NOSUID)
+            .union(MsFlags::MS_STRICTATIME),
+        Some("mode=0755"),
+    )?;
+
+    if !Path::new("/shutdown").exists() {
+        return Ok(());
+    }
+
+    options.cleanup = false;
+
+    /* expected by systemd when going back to the initramfs during shutdown */
+    setup_mountpoint("/run")?;
+    setup_mountpoint("/oldroot")?;
+
+    do_mount(
+        Some("/"),
+        "/root/run/initramfs",
+        Option::<&str>::None,
         MsFlags::MS_BIND,
-        Option::<&Path>::None,
-    )
-    .map_err(|e| format!("Failed to bind mount / -> /root/mnt: {e}"))?;
+        Option::<&str>::None,
+    )?;
 
     Ok(())
 }

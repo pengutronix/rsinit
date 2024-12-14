@@ -11,6 +11,7 @@ pub struct CmdlineOptions {
     pub rootfsflags: MsFlags,
     pub nfsroot: Option<String>,
     pub init: CString,
+    pub cleanup: bool,
 }
 
 const SBIN_INIT: &CStr = c"/sbin/init";
@@ -24,6 +25,7 @@ impl Default for CmdlineOptions {
             rootfsflags: MsFlags::MS_RDONLY,
             nfsroot: None,
             init: CString::from(SBIN_INIT),
+            cleanup: true,
         }
     }
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 use cmdline::{parse_cmdline, CmdlineOptions};
 use dmverity::prepare_dmverity;
-use mount::{mount_move_special, mount_root, mount_special};
+use mount::{mount_move_special, mount_root, mount_special, mount_systemd};
 use nix::sys::termios::tcdrain;
 use nix::unistd::{chdir, chroot, dup2, execv, unlink};
 use std::env;
@@ -42,13 +42,17 @@ fn setup_console() -> Result<()> {
     Ok(())
 }
 
-fn start_root(options: &CmdlineOptions) -> Result<()> {
-    match current_exe() {
-        Err(e) => println!("current_exe failed: {e}"),
-        Ok(exe) => unlink(exe.as_path())?,
+fn start_root(options: &mut CmdlineOptions) -> Result<()> {
+    mount_systemd(options)?;
+
+    if options.cleanup {
+        match current_exe() {
+            Err(e) => println!("current_exe failed: {e}"),
+            Ok(exe) => unlink(exe.as_path())?,
+        }
     }
 
-    mount_move_special()?;
+    mount_move_special(options)?;
 
     chdir("/root")?;
     chroot(".")?;
@@ -94,7 +98,7 @@ fn run() -> Result<()> {
     prepare_aux(&mut options)?;
 
     mount_root(&options)?;
-    start_root(&options)?;
+    start_root(&mut options)?;
 
     Ok(())
 }
