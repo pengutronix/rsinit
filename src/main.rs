@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 use cmdline::{parse_cmdline, CmdlineOptions};
+#[cfg(feature = "dmverity")]
 use dmverity::prepare_dmverity;
 use mount::{mount_move_special, mount_root, mount_special};
 use nix::sys::termios::tcdrain;
@@ -13,13 +14,16 @@ use std::os::fd::{AsFd, AsRawFd, RawFd};
 use std::os::unix::ffi::OsStrExt;
 #[cfg(feature = "systemd")]
 use systemd::{mount_systemd, shutdown};
+#[cfg(feature = "usb9pfs")]
 use usbg_9pfs::prepare_9pfs_gadget;
 
 mod cmdline;
+#[cfg(feature = "dmverity")]
 mod dmverity;
 mod mount;
 #[cfg(feature = "systemd")]
 mod systemd;
+#[cfg(feature = "usb9pfs")]
 mod usbg_9pfs;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -81,10 +85,13 @@ fn start_root(options: &mut CmdlineOptions) -> Result<()> {
     Ok(())
 }
 
+#[cfg(any(feature = "dmverity", feature = "usb9pfs"))]
 fn prepare_aux(options: &mut CmdlineOptions) -> Result<()> {
+    #[cfg(feature = "dmverity")]
     if prepare_dmverity(options)? {
         return Ok(());
     }
+    #[cfg(feature = "usb9pfs")]
     if prepare_9pfs_gadget(options)? {
         return Ok(());
     }
@@ -100,6 +107,7 @@ fn init() -> Result<()> {
     };
     parse_cmdline(cmdline, &mut options)?;
 
+    #[cfg(any(feature = "dmverity", feature = "usb9pfs"))]
     prepare_aux(&mut options)?;
 
     mount_root(&options)?;

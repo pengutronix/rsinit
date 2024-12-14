@@ -9,9 +9,11 @@ name = "init"
 path = "src/main.rs"
 
 [dependencies]
-nix = { version = "0.29", features = ["ioctl", "fs", "mount", "process", "term"] }
+nix = { version = "0.29", features = ["fs", "mount", "process", "term"], default-features = false }
 getrandom = { version = "0.2.15" }
 
 [features]
-default = ["systemd"]
+default = ["systemd", "dmverity", "usb9pfs"]
 systemd = ["nix/reboot"]
+dmverity = ["nix/ioctl"]
+usb9pfs = []
