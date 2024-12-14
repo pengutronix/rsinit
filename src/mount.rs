@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 use crate::cmdline::CmdlineOptions;
 use crate::Result;
-use nix::mount::{mount, MsFlags};
-use std::fs::{create_dir, remove_dir};
+use nix::mount::{mount, umount, MsFlags};
+use std::fs::{create_dir, read_to_string, remove_dir};
 use std::io;
 use std::path::Path;
 
@@ -140,5 +140,23 @@ pub fn mount_systemd(options: &mut CmdlineOptions) -> Result<()> {
         Option::<&str>::None,
     )?;
 
+    Ok(())
+}
+
+pub fn umount_root() -> Result<()> {
+    if let Ok(data) = read_to_string("/proc/self/mountinfo") {
+        let mut mounts = Vec::new();
+        for line in data.lines() {
+            if let Some(mountpoint) = line.split(' ').nth(4) {
+                if mountpoint.starts_with("/oldroot") {
+                    mounts.push(mountpoint);
+                }
+            }
+        }
+        mounts.sort();
+        while let Some(mountpoint) = mounts.pop() {
+            umount(mountpoint).map_err(|e| format!("Failed to unmount {mountpoint}: {e}"))?;
+        }
+    }
     Ok(())
 }

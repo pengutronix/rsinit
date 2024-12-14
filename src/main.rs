@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 use cmdline::{parse_cmdline, CmdlineOptions};
 use dmverity::prepare_dmverity;
-use mount::{mount_move_special, mount_root, mount_special, mount_systemd};
+use mount::{mount_move_special, mount_root, mount_special, mount_systemd, umount_root};
+use nix::sys::reboot::{reboot, RebootMode};
 use nix::sys::termios::tcdrain;
 use nix::unistd::{chdir, chroot, dup2, execv, unlink};
 use std::env;
@@ -86,7 +87,7 @@ fn prepare_aux(options: &mut CmdlineOptions) -> Result<()> {
     Ok(())
 }
 
-fn run() -> Result<()> {
+fn init() -> Result<()> {
     mount_special(true)?;
 
     let cmdline = read_file("/proc/cmdline")?;
@@ -103,12 +104,28 @@ fn run() -> Result<()> {
     Ok(())
 }
 
+fn shutdown() -> Result<()> {
+    umount_root()?;
+    let arg = match env::args().nth(1).as_deref() {
+        Some("halt") => RebootMode::RB_HALT_SYSTEM,
+        Some("kexec") => RebootMode::RB_KEXEC,
+        Some("poweroff") => RebootMode::RB_POWER_OFF,
+        _ => RebootMode::RB_AUTOBOOT,
+    };
+    reboot(arg).map_err(|e| format!("reboot failed: {e}"))?;
+    Ok(())
+}
+
 fn main() -> Result<()> {
     setup_console()?;
 
-    println!("Running init...");
+    let cmd = env::args().next().unwrap();
+    println!("Running {}...", cmd);
 
-    if let Err(e) = run() {
+    if let Err(e) = match cmd.as_str() {
+        "/shutdown" => shutdown(),
+        _ => init(),
+    } {
         println!("{e}");
     }
     /* Make sure all output is written before exiting */
