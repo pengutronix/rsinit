@@ -4,10 +4,13 @@ use dmverity::prepare_dmverity;
 use mount::{mount_move_special, mount_root, mount_special};
 use nix::sys::termios::tcdrain;
 use nix::unistd::{chdir, chroot, dup2, execv, unlink};
+use std::env;
 use std::env::current_exe;
+use std::ffi::CString;
 use std::fs::{read_to_string, OpenOptions};
 use std::io;
 use std::os::fd::{AsFd, AsRawFd, RawFd};
+use std::os::unix::ffi::OsStrExt;
 use usbg_9pfs::prepare_9pfs_gadget;
 
 mod cmdline;
@@ -51,11 +54,20 @@ fn start_root(options: &CmdlineOptions) -> Result<()> {
     chroot(".")?;
     chdir("/")?;
 
-    println!(
-        "Starting {}...",
-        options.init.to_str().unwrap_or("<invalid utf-8>")
-    );
-    execv(options.init.as_ref(), &[options.init.as_ref()])?;
+    let mut args = Vec::new();
+    args.push(options.init.clone());
+
+    for arg in env::args_os().skip(1) {
+        let carg = CString::new(arg.as_bytes())?;
+        args.push(carg);
+    }
+    print!("Starting ");
+    for arg in &args {
+        print!("{} ", arg.to_str().unwrap_or("<invalid utf-8>"));
+    }
+    println!("...");
+
+    execv(options.init.as_ref(), &args)?;
 
     Ok(())
 }
