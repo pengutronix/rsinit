@@ -37,7 +37,7 @@ pub fn do_mount(
     Ok(())
 }
 
-fn mount_apivfs(dst: &str, fstype: &str) -> Result<()> {
+pub fn mount_apivfs(dst: &str, fstype: &str) -> Result<()> {
     do_mount(
         Some(fstype),
         dst,
@@ -94,12 +94,9 @@ fn mount_move(src: &str, dst: &str, cleanup: bool) -> Result<()> {
     Ok(())
 }
 
-pub fn mount_special(mount_config: bool) -> Result<()> {
+pub fn mount_special() -> Result<()> {
     mount_apivfs("/dev", "devtmpfs")?;
     mount_apivfs("/sys", "sysfs")?;
-    if mount_config && Path::new("/sys/kernel/config").is_dir() {
-        mount_apivfs("/sys/kernel/config", "configfs")?;
-    }
     mount_apivfs("/proc", "proc")?;
     Ok(())
 }

@@ -99,7 +99,7 @@ fn prepare_aux(options: &mut CmdlineOptions) -> Result<()> {
 }
 
 fn init() -> Result<()> {
-    mount_special(true)?;
+    mount_special()?;
 
     let cmdline = read_file("/proc/cmdline")?;
     let mut options = CmdlineOptions {

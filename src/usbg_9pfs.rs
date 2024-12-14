@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 use crate::cmdline::CmdlineOptions;
+use crate::mount::mount_apivfs;
 use crate::Result;
 use std::fs::{create_dir, read_dir, write};
 use std::os::unix::fs::symlink;
@@ -22,6 +23,8 @@ fn setup_9pfs_gadget(device: &String) -> Result<()> {
         .ok_or("No UDC found to attach the 9pfs gadget".to_string())?
         .map_err(|e| format!("Failed to inspect the first entry in /sys/class/udc: {e}"))?
         .file_name();
+
+    mount_apivfs("/sys/kernel/config", "configfs")?;
 
     mkdir("/sys/kernel/config/usb_gadget/9pfs")?;
 
