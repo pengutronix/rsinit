@@ -69,7 +69,10 @@ fn setup_9pfs_gadget(device: &String) -> Result<()> {
 
 pub fn prepare_9pfs_gadget(options: &CmdlineOptions) -> Result<bool> {
     if options.rootfstype.as_deref() == Some("9p")
-        && options.rootflags.as_deref() == Some("trans=usbg")
+        && options
+            .rootflags
+            .as_deref()
+            .is_some_and(|flags| flags.contains("trans=usbg"))
     {
         if let Some(root) = &options.root {
             setup_9pfs_gadget(root)?;
