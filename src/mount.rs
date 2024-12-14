@@ -6,58 +6,45 @@ use std::fs::{create_dir, remove_dir};
 use std::io;
 use std::path::Path;
 
-fn mount_apivfs(dst: &str, fstype: &str) -> Result<()> {
-    if let Err(e) = create_dir(dst) {
+fn setup_mountpoint(dir: &str) -> Result<()> {
+    if let Err(e) = create_dir(dir) {
         if e.kind() != io::ErrorKind::AlreadyExists {
-            return Err(format!("Failed to create {dst}: {e}").into());
+            return Err(format!("Failed to create {}: {e}", dir).into());
         }
     }
+    Ok(())
+}
 
-    mount(
-        Some(Path::new(fstype)),
-        Path::new(dst),
-        Some(Path::new(fstype)),
-        MsFlags::empty(),
-        Option::<&Path>::None,
-    )
-    .map_err(|e| format!("Failed to mount {fstype} -> {dst}: {e}"))?;
+fn do_mount(
+    src: Option<&str>,
+    dst: &str,
+    fstype: Option<&str>,
+    flags: MsFlags,
+    data: Option<&str>,
+) -> Result<()> {
+    setup_mountpoint(dst)?;
+
+    mount(src, dst, fstype, flags, data).map_err(|e| {
+        format!(
+            "Failed to mount {} -> {} ({:#x}, {}): {e}",
+            src.unwrap_or(""),
+            dst,
+            flags.bits(),
+            data.unwrap_or(""),
+        )
+    })?;
 
     Ok(())
 }
 
-fn mount_rootfs(
-    src: &Option<String>,
-    fstype: &Option<String>,
-    flags: MsFlags,
-    args: &Option<String>,
-) -> Result<()> {
-    if let Err(e) = create_dir("/root") {
-        if e.kind() != io::ErrorKind::AlreadyExists {
-            return Err(format!("Failed to create /root: {e}").into());
-        }
-    }
-
-    println!(
-        "Mounting rootfs {} -> /root ({}, '{}')",
-        src.as_deref().unwrap(),
-        fstype.as_deref().unwrap_or_default(),
-        args.as_deref().unwrap_or_default()
-    );
-    mount(
-        src.as_deref(),
-        Path::new("/root"),
-        fstype.as_deref(),
-        flags,
-        args.as_deref(),
-    )
-    .map_err(|e| {
-        format!(
-            "Failed to mount {} -> /root ({}, '{}'): {e}",
-            src.as_ref().unwrap_or(&String::default()),
-            fstype.as_ref().unwrap_or(&String::default()),
-            args.as_ref().unwrap_or(&String::default())
-        )
-    })?;
+fn mount_apivfs(dst: &str, fstype: &str) -> Result<()> {
+    do_mount(
+        Some(fstype),
+        dst,
+        Some(fstype),
+        MsFlags::empty(),
+        Option::<&str>::None,
+    )?;
 
     Ok(())
 }
