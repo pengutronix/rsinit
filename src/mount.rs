@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 use crate::cmdline::CmdlineOptions;
 use crate::Result;
-use nix::mount::{mount, umount, MsFlags};
-use std::fs::{create_dir, read_to_string, remove_dir};
+use nix::mount::{mount, MsFlags};
+use std::fs::{create_dir, remove_dir};
 use std::io;
 use std::path::Path;
 
-fn setup_mountpoint(dir: &str) -> Result<()> {
+pub fn setup_mountpoint(dir: &str) -> Result<()> {
     if let Err(e) = create_dir(dir) {
         if e.kind() != io::ErrorKind::AlreadyExists {
             return Err(format!("Failed to create {}: {e}", dir).into());
@@ -15,7 +15,7 @@ fn setup_mountpoint(dir: &str) -> Result<()> {
     Ok(())
 }
 
-fn do_mount(
+pub fn do_mount(
     src: Option<&str>,
     dst: &str,
     fstype: Option<&str>,
@@ -108,55 +108,5 @@ pub fn mount_move_special(options: &CmdlineOptions) -> Result<()> {
     mount_move("/dev", "/root/dev", options.cleanup)?;
     mount_move("/sys", "/root/sys", options.cleanup)?;
     mount_move("/proc", "/root/proc", options.cleanup)?;
-    Ok(())
-}
-
-pub fn mount_systemd(options: &mut CmdlineOptions) -> Result<()> {
-    do_mount(
-        Option::<&str>::None,
-        "/root/run",
-        Some("tmpfs"),
-        MsFlags::MS_NODEV
-            .union(MsFlags::MS_NOSUID)
-            .union(MsFlags::MS_STRICTATIME),
-        Some("mode=0755"),
-    )?;
-
-    if !Path::new("/shutdown").exists() {
-        return Ok(());
-    }
-
-    options.cleanup = false;
-
-    /* expected by systemd when going back to the initramfs during shutdown */
-    setup_mountpoint("/run")?;
-    setup_mountpoint("/oldroot")?;
-
-    do_mount(
-        Some("/"),
-        "/root/run/initramfs",
-        Option::<&str>::None,
-        MsFlags::MS_BIND,
-        Option::<&str>::None,
-    )?;
-
-    Ok(())
-}
-
-pub fn umount_root() -> Result<()> {
-    if let Ok(data) = read_to_string("/proc/self/mountinfo") {
-        let mut mounts = Vec::new();
-        for line in data.lines() {
-            if let Some(mountpoint) = line.split(' ').nth(4) {
-                if mountpoint.starts_with("/oldroot") {
-                    mounts.push(mountpoint);
-                }
-            }
-        }
-        mounts.sort();
-        while let Some(mountpoint) = mounts.pop() {
-            umount(mountpoint).map_err(|e| format!("Failed to unmount {mountpoint}: {e}"))?;
-        }
-    }
     Ok(())
 }

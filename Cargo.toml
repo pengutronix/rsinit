@@ -9,5 +9,9 @@ name = "init"
 path = "src/main.rs"
 
 [dependencies]
-nix = { version = "0.29", features = ["ioctl", "fs", "mount", "process", "reboot", "term"] }
+nix = { version = "0.29", features = ["ioctl", "fs", "mount", "process", "term"] }
 getrandom = { version = "0.2.15" }
+
+[features]
+default = ["systemd"]
+systemd = ["nix/reboot"]

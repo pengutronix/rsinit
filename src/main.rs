@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 use cmdline::{parse_cmdline, CmdlineOptions};
 use dmverity::prepare_dmverity;
-use mount::{mount_move_special, mount_root, mount_special, mount_systemd, umount_root};
-use nix::sys::reboot::{reboot, RebootMode};
+use mount::{mount_move_special, mount_root, mount_special};
 use nix::sys::termios::tcdrain;
 use nix::unistd::{chdir, chroot, dup2, execv, unlink};
 use std::env;
@@ -12,11 +11,15 @@ use std::fs::{read_to_string, OpenOptions};
 use std::io;
 use std::os::fd::{AsFd, AsRawFd, RawFd};
 use std::os::unix::ffi::OsStrExt;
+#[cfg(feature = "systemd")]
+use systemd::{mount_systemd, shutdown};
 use usbg_9pfs::prepare_9pfs_gadget;
 
 mod cmdline;
 mod dmverity;
 mod mount;
+#[cfg(feature = "systemd")]
+mod systemd;
 mod usbg_9pfs;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -44,6 +47,7 @@ fn setup_console() -> Result<()> {
 }
 
 fn start_root(options: &mut CmdlineOptions) -> Result<()> {
+    #[cfg(feature = "systemd")]
     mount_systemd(options)?;
 
     if options.cleanup {
@@ -104,18 +108,6 @@ fn init() -> Result<()> {
     Ok(())
 }
 
-fn shutdown() -> Result<()> {
-    umount_root()?;
-    let arg = match env::args().nth(1).as_deref() {
-        Some("halt") => RebootMode::RB_HALT_SYSTEM,
-        Some("kexec") => RebootMode::RB_KEXEC,
-        Some("poweroff") => RebootMode::RB_POWER_OFF,
-        _ => RebootMode::RB_AUTOBOOT,
-    };
-    reboot(arg).map_err(|e| format!("reboot failed: {e}"))?;
-    Ok(())
-}
-
 fn main() -> Result<()> {
     setup_console()?;
 
@@ -123,6 +115,7 @@ fn main() -> Result<()> {
     println!("Running {}...", cmd);
 
     if let Err(e) = match cmd.as_str() {
+        #[cfg(feature = "systemd")]
         "/shutdown" => shutdown(),
         _ => init(),
     } {
