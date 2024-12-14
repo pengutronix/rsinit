@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 license = "GPL-2.0-only"
 
+[[bin]]
+name = "init"
+path = "src/main.rs"
+
 [dependencies]
 nix = { version = "0.29", features = ["ioctl", "fs", "mount", "process", "reboot", "term"] }
 getrandom = { version = "0.2.15" }
