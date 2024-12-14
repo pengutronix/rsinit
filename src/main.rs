@@ -3,6 +3,8 @@ use cmdline::{parse_cmdline, CmdlineOptions};
 #[cfg(feature = "dmverity")]
 use dmverity::prepare_dmverity;
 use mount::{mount_move_special, mount_root, mount_special};
+#[cfg(feature = "reboot-on-failure")]
+use nix::sys::reboot::{reboot, RebootMode};
 use nix::sys::termios::tcdrain;
 use nix::unistd::{chdir, chroot, dup2, execv, unlink};
 use std::env;
@@ -12,6 +14,7 @@ use std::fs::{read_to_string, OpenOptions};
 use std::io;
 use std::os::fd::{AsFd, AsRawFd, RawFd};
 use std::os::unix::ffi::OsStrExt;
+use std::panic::set_hook;
 #[cfg(feature = "systemd")]
 use systemd::{mount_systemd, shutdown};
 #[cfg(feature = "usb9pfs")]
@@ -116,8 +119,20 @@ fn init() -> Result<()> {
     Ok(())
 }
 
+fn finalize() {
+    /* Make sure all output is written before exiting */
+    let _ = tcdrain(io::stdout().as_fd());
+    #[cfg(feature = "reboot-on-failure")]
+    let _ = reboot(RebootMode::RB_AUTOBOOT);
+}
+
 fn main() -> Result<()> {
     setup_console()?;
+
+    set_hook(Box::new(|panic_info| {
+        println!("panic occurred: {panic_info}");
+        finalize();
+    }));
 
     let cmd = env::args().next().unwrap();
     println!("Running {}...", cmd);
@@ -129,7 +144,6 @@ fn main() -> Result<()> {
     } {
         println!("{e}");
     }
-    /* Make sure all output is written before exiting */
-    tcdrain(io::stdout().as_fd())?;
+    finalize();
     Ok(())
 }

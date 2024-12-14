@@ -13,7 +13,8 @@ nix = { version = "0.29", features = ["fs", "mount", "process", "term"], default
 getrandom = { version = "0.2.15" }
 
 [features]
-default = ["systemd", "dmverity", "usb9pfs"]
+default = ["systemd", "dmverity", "usb9pfs", "reboot-on-failure"]
 systemd = ["nix/reboot"]
 dmverity = ["nix/ioctl"]
 usb9pfs = []
+reboot-on-failure = ["nix/reboot"]
