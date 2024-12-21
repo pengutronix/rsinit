@@ -30,7 +30,7 @@ impl Default for CmdlineOptions {
     }
 }
 
-fn ensure_value(key: String, value: Option<String>) -> Result<Option<String>> {
+fn ensure_value<'a>(key: &str, value: Option<&'a str>) -> Result<Option<&'a str>> {
     if value.is_none() {
         Err(format!("Cmdline option '{key}' must have an argument!").into())
     } else {
@@ -38,14 +38,14 @@ fn ensure_value(key: String, value: Option<String>) -> Result<Option<String>> {
     }
 }
 
-fn parse_option(key: String, value: Option<String>, options: &mut CmdlineOptions) -> Result<()> {
-    match key.as_str() {
-        "root" => options.root = ensure_value(key, value)?,
-        "rootfstype" => options.rootfstype = ensure_value(key, value)?,
-        "rootflags" => options.rootflags = value,
+fn parse_option(key: &str, value: Option<&str>, options: &mut CmdlineOptions) -> Result<()> {
+    match key {
+        "root" => options.root = ensure_value(key, value)?.map(str::to_string),
+        "rootfstype" => options.rootfstype = ensure_value(key, value)?.map(str::to_string),
+        "rootflags" => options.rootflags = value.map(str::to_string),
         "ro" => options.rootfsflags.insert(MsFlags::MS_RDONLY),
         "rw" => options.rootfsflags.remove(MsFlags::MS_RDONLY),
-        "nfsroot" => options.nfsroot = ensure_value(key, value)?,
+        "nfsroot" => options.nfsroot = ensure_value(key, value)?.map(str::to_string),
         "init" => options.init = CString::new(ensure_value(key, value)?.unwrap()).unwrap(),
         _ => (),
     }
@@ -94,15 +94,17 @@ fn parse_nfsroot(options: &mut CmdlineOptions) -> Result<()> {
 pub fn parse_cmdline(cmdline: String, options: &mut CmdlineOptions) -> Result<()> {
     let mut have_value = false;
     let mut quoted = false;
-    let mut key = String::new();
-    let mut value = String::new();
+    let mut key = &cmdline[0..0];
+    let mut start = 0;
 
-    for c in cmdline.chars() {
+    for (i, c) in cmdline.chars().enumerate() {
         let mut skip = false;
         match c {
             '=' => {
                 if !have_value {
                     skip = true;
+                    key = &cmdline[start..i];
+                    start = i;
                 }
                 have_value = true;
             }
@@ -112,23 +114,29 @@ pub fn parse_cmdline(cmdline: String, options: &mut CmdlineOptions) -> Result<()
             }
             ' ' | '\n' => {
                 if !quoted {
-                    if !key.is_empty() {
-                        parse_option(key, if have_value { Some(value) } else { None }, options)?;
+                    if !have_value {
+                        key = &cmdline[start..i];
                     }
-                    key = String::new();
-                    value = String::new();
+                    if !key.is_empty() {
+                        parse_option(
+                            key,
+                            if have_value {
+                                Some(&cmdline[start..i])
+                            } else {
+                                None
+                            },
+                            options,
+                        )?;
+                    }
+                    key = &cmdline[0..0];
                     have_value = false;
                     skip = true;
                 }
             }
             _ => {}
         }
-        if !skip {
-            if have_value {
-                value.push(c);
-            } else {
-                key.push(c)
-            }
+        if skip {
+            start = i + 1;
         }
     }
     if options.root.as_deref() == Some("/dev/nfs") || options.rootfstype.as_deref() == Some("nfs") {
