@@ -1,14 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-only
 use crate::cmdline::CmdlineOptions;
 use crate::mount::mount_apivfs;
-use crate::Result;
-use std::fs::{create_dir, read_dir, write};
+use crate::{mkdir, Result};
+use std::fs::{read_dir, write};
 use std::os::unix::fs::symlink;
 use std::{thread, time};
-
-fn mkdir(dir: &str) -> Result<()> {
-    create_dir(dir).map_err(|e| format!("Failed to create {dir}: {e}").into())
-}
 
 fn write_file<C: AsRef<[u8]>>(path: &str, content: C) -> Result<()> {
     write(path, content).map_err(|e| format!("Failed to write to {path}: {e}").into())

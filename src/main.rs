@@ -10,7 +10,7 @@ use nix::unistd::{chdir, chroot, dup2, execv, unlink};
 use std::env;
 use std::env::current_exe;
 use std::ffi::CString;
-use std::fs::{read_to_string, OpenOptions};
+use std::fs::{create_dir, read_to_string, OpenOptions};
 use std::io;
 use std::os::fd::{AsFd, AsRawFd, RawFd};
 use std::os::unix::ffi::OsStrExt;
@@ -30,6 +30,15 @@ mod systemd;
 mod usbg_9pfs;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+pub fn mkdir(dir: &str) -> Result<()> {
+    if let Err(e) = create_dir(dir) {
+        if e.kind() != io::ErrorKind::AlreadyExists {
+            return Err(format!("Failed to create {dir}: {e}",).into());
+        }
+    }
+    Ok(())
+}
 
 fn read_file(filename: &str) -> std::result::Result<String, String> {
     read_to_string(filename).map_err(|e| format!("Failed to read {filename}: {e}"))

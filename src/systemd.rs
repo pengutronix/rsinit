@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
+use crate::cmdline::CmdlineOptions;
 use crate::mount::do_mount;
-use crate::Result;
-use crate::{cmdline::CmdlineOptions, mount::setup_mountpoint};
+use crate::{mkdir, Result};
 use nix::mount::{umount, MsFlags};
 use nix::sys::reboot::{reboot, RebootMode};
 use std::collections::BinaryHeap;
@@ -27,8 +27,8 @@ pub fn mount_systemd(options: &mut CmdlineOptions) -> Result<()> {
     options.cleanup = false;
 
     /* expected by systemd when going back to the initramfs during shutdown */
-    setup_mountpoint("/run")?;
-    setup_mountpoint("/oldroot")?;
+    mkdir("/run")?;
+    mkdir("/oldroot")?;
 
     do_mount(
         Some("/"),

@@ -1,19 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 use crate::cmdline::CmdlineOptions;
-use crate::Result;
+use crate::{mkdir, Result};
 use nix::mount::{mount, MsFlags};
-use std::fs::{create_dir, remove_dir};
-use std::io;
+use std::fs::remove_dir;
 use std::path::Path;
-
-pub fn setup_mountpoint(dir: &str) -> Result<()> {
-    if let Err(e) = create_dir(dir) {
-        if e.kind() != io::ErrorKind::AlreadyExists {
-            return Err(format!("Failed to create {}: {e}", dir).into());
-        }
-    }
-    Ok(())
-}
 
 pub fn do_mount(
     src: Option<&str>,
@@ -22,7 +12,7 @@ pub fn do_mount(
     flags: MsFlags,
     data: Option<&str>,
 ) -> Result<()> {
-    setup_mountpoint(dst)?;
+    mkdir(dst)?;
 
     mount(src, dst, fstype, flags, data).map_err(|e| {
         format!(
@@ -54,11 +44,7 @@ pub fn mount_root(options: &CmdlineOptions) -> Result<()> {
         return Err("root= not found in /proc/cmdline".into());
     }
 
-    if let Err(e) = create_dir("/root") {
-        if e.kind() != io::ErrorKind::AlreadyExists {
-            return Err(format!("Failed to create /root: {e}").into());
-        }
-    }
+    mkdir("/root")?;
 
     println!(
         "Mounting rootfs {} -> /root ({}, '{}')",
