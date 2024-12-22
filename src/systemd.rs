@@ -4,6 +4,7 @@ use crate::Result;
 use crate::{cmdline::CmdlineOptions, mount::setup_mountpoint};
 use nix::mount::{umount, MsFlags};
 use nix::sys::reboot::{reboot, RebootMode};
+use std::collections::BinaryHeap;
 use std::env;
 use std::fs::read_to_string;
 use std::path::Path;
@@ -42,7 +43,7 @@ pub fn mount_systemd(options: &mut CmdlineOptions) -> Result<()> {
 
 fn umount_root() -> Result<()> {
     if let Ok(data) = read_to_string("/proc/self/mountinfo") {
-        let mut mounts = Vec::new();
+        let mut mounts = BinaryHeap::new();
         for line in data.lines() {
             if let Some(mountpoint) = line.split(' ').nth(4) {
                 if mountpoint.starts_with("/oldroot") {
@@ -50,7 +51,6 @@ fn umount_root() -> Result<()> {
                 }
             }
         }
-        mounts.sort();
         while let Some(mountpoint) = mounts.pop() {
             umount(mountpoint).map_err(|e| format!("Failed to unmount {mountpoint}: {e}"))?;
         }
