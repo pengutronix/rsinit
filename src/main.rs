@@ -88,7 +88,7 @@ fn start_root(options: &mut CmdlineOptions) -> Result<()> {
     }
     print!("Starting ");
     for arg in &args {
-        print!("{} ", arg.to_str().unwrap_or("<invalid utf-8>"));
+        print!("{} ", arg.to_bytes().escape_ascii());
     }
     println!("...");
 
@@ -144,7 +144,7 @@ fn main() -> Result<()> {
     }));
 
     let cmd = env::args().next().unwrap();
-    println!("Running {}...", cmd);
+    println!("Running {cmd}...");
 
     if let Err(e) = match cmd.as_str() {
         #[cfg(feature = "systemd")]

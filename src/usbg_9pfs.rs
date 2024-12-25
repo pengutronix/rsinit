@@ -3,6 +3,7 @@ use crate::cmdline::CmdlineOptions;
 use crate::mount::mount_apivfs;
 use crate::{mkdir, Result};
 use std::fs::{read_dir, write};
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::symlink;
 use std::{thread, time};
 
@@ -51,7 +52,7 @@ fn setup_9pfs_gadget(device: &String) -> Result<()> {
 
     println!(
         "Attaching 9pfs gatget to UDC {}",
-        udc.to_str().unwrap_or("<invalid utf-8>")
+        udc.as_bytes().escape_ascii()
     );
     write_file(
         "/sys/kernel/config/usb_gadget/9pfs/UDC",

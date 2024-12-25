@@ -16,11 +16,12 @@ pub fn do_mount(
 
     mount(src, dst, fstype, flags, data).map_err(|e| {
         format!(
-            "Failed to mount {} -> {} ({:#x}, {}): {e}",
-            src.unwrap_or(""),
+            "Failed to mount {} -> {} as {} with flags = {:#x}, data = '{}'): {e}",
+            src.unwrap_or_default(),
             dst,
+            fstype.unwrap_or_default(),
             flags.bits(),
-            data.unwrap_or(""),
+            data.unwrap_or_default(),
         )
     })?;
 
@@ -47,9 +48,10 @@ pub fn mount_root(options: &CmdlineOptions) -> Result<()> {
     mkdir("/root")?;
 
     println!(
-        "Mounting rootfs {} -> /root ({}, '{}')",
+        "Mounting rootfs {} -> /root as {} with flags = {:#x}, data = '{}'",
         options.root.as_deref().unwrap(),
         options.rootfstype.as_deref().unwrap_or_default(),
+        options.rootfsflags.bits(),
         options.rootflags.as_deref().unwrap_or_default()
     );
     do_mount(
