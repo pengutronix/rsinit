@@ -11,6 +11,7 @@ path = "src/main.rs"
 [dependencies]
 nix = { version = "0.29", features = ["fs", "mount", "process", "term"], default-features = false }
 getrandom = { version = "0.2.15" }
+log = { version = "0.4.21", features = ["std"], default-features = false}
 
 [features]
 default = ["systemd", "dmverity", "usb9pfs", "reboot-on-failure"]

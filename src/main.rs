@@ -2,16 +2,20 @@
 use cmdline::{parse_cmdline, CmdlineOptions};
 #[cfg(feature = "dmverity")]
 use dmverity::prepare_dmverity;
+use log::{debug, error, Level, LevelFilter, Metadata, Record};
 use mount::{mount_move_special, mount_root, mount_special};
 #[cfg(feature = "reboot-on-failure")]
 use nix::sys::reboot::{reboot, RebootMode};
 use nix::sys::termios::tcdrain;
 use nix::unistd::{chdir, chroot, dup2, execv, unlink};
+use std::borrow::Borrow;
 use std::env;
 use std::env::current_exe;
 use std::ffi::CString;
-use std::fs::{create_dir, read_to_string, OpenOptions};
+use std::fmt::Write as _;
+use std::fs::{create_dir, read_to_string, File, OpenOptions};
 use std::io;
+use std::io::Write as _;
 use std::os::fd::{AsFd, AsRawFd, RawFd};
 use std::os::unix::ffi::OsStrExt;
 use std::panic::set_hook;
@@ -68,7 +72,7 @@ fn start_root(options: &mut CmdlineOptions) -> Result<()> {
 
     if options.cleanup {
         match current_exe() {
-            Err(e) => println!("current_exe failed: {e}"),
+            Err(e) => error!("current_exe failed: {e}"),
             Ok(exe) => unlink(exe.as_path())?,
         }
     }
@@ -86,11 +90,12 @@ fn start_root(options: &mut CmdlineOptions) -> Result<()> {
         let carg = CString::new(arg.as_bytes())?;
         args.push(carg);
     }
-    print!("Starting ");
+    let mut buf = "Starting ".to_string();
     for arg in &args {
-        print!("{} ", arg.to_bytes().escape_ascii());
+        write!(buf, "{} ", arg.to_bytes().escape_ascii())?;
     }
-    println!("...");
+    writeln!(buf, "...")?;
+    debug!("{}", &buf);
 
     execv(options.init.as_ref(), &args)?;
 
@@ -110,8 +115,42 @@ fn prepare_aux(options: &mut CmdlineOptions) -> Result<()> {
     Ok(())
 }
 
+struct KmsgLogger {
+    kmsg: File,
+}
+
+impl log::Log for KmsgLogger {
+    fn enabled(&self, _: &Metadata) -> bool {
+        true
+    }
+    fn log(&self, record: &Record) {
+        let level = match record.level() {
+            Level::Error => 3,
+            Level::Warn => 4,
+            /* 5 == notice has no equivalent */
+            Level::Info => 6,
+            Level::Debug | Level::Trace => 7,
+        } | 1 << 3;
+        /* Format first to ensure that the whole message is written with
+         * one write() system-call */
+        let msg = format!("<{level}> rdinit: {}", record.args());
+        let _ = self.kmsg.borrow().write_all(msg.as_bytes());
+    }
+    fn flush(&self) {}
+}
+
+fn setup_log() -> Result<()> {
+    let logger = KmsgLogger {
+        kmsg: OpenOptions::new().write(true).open("/dev/kmsg")?,
+    };
+    log::set_boxed_logger(Box::new(logger)).map(|()| log::set_max_level(LevelFilter::Trace))?;
+    Ok(())
+}
+
 fn init() -> Result<()> {
     mount_special()?;
+
+    setup_log()?;
 
     let cmdline = read_file("/proc/cmdline")?;
     let mut options = CmdlineOptions {

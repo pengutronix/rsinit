@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 use crate::cmdline::CmdlineOptions;
 use crate::{mkdir, Result};
+use log::debug;
 use nix::mount::{mount, MsFlags};
 use std::fs::remove_dir;
 use std::path::Path;
@@ -47,7 +48,7 @@ pub fn mount_root(options: &CmdlineOptions) -> Result<()> {
 
     mkdir("/root")?;
 
-    println!(
+    debug!(
         "Mounting rootfs {} -> /root as {} with flags = {:#x}, data = '{}'",
         options.root.as_deref().unwrap(),
         options.rootfstype.as_deref().unwrap_or_default(),

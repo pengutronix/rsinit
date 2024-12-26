@@ -2,6 +2,7 @@
 use crate::cmdline::CmdlineOptions;
 use crate::mount::mount_apivfs;
 use crate::{mkdir, Result};
+use log::debug;
 use std::fs::{read_dir, write};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::symlink;
@@ -12,7 +13,7 @@ fn write_file<C: AsRef<[u8]>>(path: &str, content: C) -> Result<()> {
 }
 
 fn setup_9pfs_gadget(device: &String) -> Result<()> {
-    println!("Initializing USB 9pfs gadget ...");
+    debug!("Initializing USB 9pfs gadget ...");
 
     let udc = read_dir("/sys/class/udc")
         .map_err(|e| format!("Failed to list /sys/class/udc: {e}"))?
@@ -50,7 +51,7 @@ fn setup_9pfs_gadget(device: &String) -> Result<()> {
     mkdir(&function)?;
     symlink(&function, &link)?;
 
-    println!(
+    debug!(
         "Attaching 9pfs gatget to UDC {}",
         udc.as_bytes().escape_ascii()
     );

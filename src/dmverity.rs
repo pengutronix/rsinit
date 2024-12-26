@@ -2,6 +2,7 @@
 use crate::cmdline::CmdlineOptions;
 use crate::{read_file, Result};
 use getrandom::getrandom;
+use log::debug;
 use nix::ioctl_readwrite;
 use nix::libc::dev_t;
 use nix::sys::stat::minor;
@@ -103,7 +104,7 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
         }
     }
 
-    println!("Configuring dm-verity rootfs with root-hash = {root_hash}");
+    debug!("Configuring dm-verity rootfs with root-hash = {root_hash}");
 
     let f = OpenOptions::new()
         .write(true)
