@@ -51,7 +51,7 @@ fn umount_root() -> Result<()> {
                 }
             }
         }
-        while let Some(mountpoint) = mounts.pop() {
+        for mountpoint in mounts {
             umount(mountpoint).map_err(|e| format!("Failed to unmount {mountpoint}: {e}"))?;
         }
     }
