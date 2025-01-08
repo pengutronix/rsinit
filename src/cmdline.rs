@@ -30,33 +30,32 @@ impl Default for CmdlineOptions {
     }
 }
 
-fn ensure_value<'a>(key: &str, value: Option<&'a str>) -> Result<Option<&'a str>> {
-    if value.is_none() {
-        Err(format!("Cmdline option '{key}' must have an argument!").into())
-    } else {
-        Ok(value)
+fn ensure_value<'a>(key: &str, value: Option<&'a str>) -> Result<&'a str> {
+    match value {
+        None => Err(format!("Cmdline option '{key}' must have an argument!").into()),
+        Some(s) => Ok(s),
     }
 }
 
 fn parse_option(key: &str, value: Option<&str>, options: &mut CmdlineOptions) -> Result<()> {
     match key {
-        "root" => options.root = ensure_value(key, value)?.map(str::to_string),
-        "rootfstype" => options.rootfstype = ensure_value(key, value)?.map(str::to_string),
+        "root" => options.root = Some(ensure_value(key, value)?.to_string()),
+        "rootfstype" => options.rootfstype = Some(ensure_value(key, value)?.to_string()),
         "rootflags" => options.rootflags = value.map(str::to_string),
         "ro" => options.rootfsflags.insert(MsFlags::MS_RDONLY),
         "rw" => options.rootfsflags.remove(MsFlags::MS_RDONLY),
-        "nfsroot" => options.nfsroot = ensure_value(key, value)?.map(str::to_string),
-        "init" => options.init = CString::new(ensure_value(key, value)?.unwrap()).unwrap(),
+        "nfsroot" => options.nfsroot = Some(ensure_value(key, value)?.to_string()),
+        "init" => options.init = CString::new(ensure_value(key, value)?)?,
         _ => (),
     }
     Ok(())
 }
 
 fn parse_nfsroot(options: &mut CmdlineOptions) -> Result<()> {
-    if options.nfsroot.is_none() {
-        return Err("Missing nfsroot command-line option!".into());
-    }
-    let nfsroot_option = options.nfsroot.as_ref().unwrap();
+    let nfsroot_option = options
+        .nfsroot
+        .as_ref()
+        .ok_or("Missing nfsroot command-line option!")?;
     let mut rootflags = String::from("nolock");
     let mut nfsroot = match nfsroot_option.split_once(',') {
         None => nfsroot_option.to_string(),
@@ -82,7 +81,9 @@ fn parse_nfsroot(options: &mut CmdlineOptions) -> Result<()> {
             }
         }
     } else {
-        let (bootserver, _) = nfsroot.split_once(':').unwrap();
+        let (bootserver, _) = nfsroot
+            .split_once(':')
+            .ok_or("Failed to split out path from nfsroot parameter")?;
         rootflags.push_str(bootserver);
     }
     options.root = Some(nfsroot.to_string());

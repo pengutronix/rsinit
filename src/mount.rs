@@ -50,7 +50,7 @@ pub fn mount_root(options: &CmdlineOptions) -> Result<()> {
 
     debug!(
         "Mounting rootfs {} -> /root as {} with flags = {:#x}, data = '{}'",
-        options.root.as_deref().unwrap(),
+        options.root.as_deref().ok_or("No root device argument")?,
         options.rootfstype.as_deref().unwrap_or_default(),
         options.rootfsflags.bits(),
         options.rootflags.as_deref().unwrap_or_default()

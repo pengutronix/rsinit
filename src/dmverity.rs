@@ -59,12 +59,13 @@ ioctl_readwrite!(dm_dev_create, 0xfd, DM_DEV_CREATE_CMD, DmIoctl);
 ioctl_readwrite!(dm_table_load, 0xfd, DM_TABLE_LOAD_CMD, DmIoctl);
 ioctl_readwrite!(dm_dev_suspend, 0xfd, DM_DEV_SUSPEND_CMD, DmIoctl);
 
-fn init_header(header: &mut DmIoctl, size: u32, flags: u32, uuid: &[u8]) {
+fn init_header(header: &mut DmIoctl, size: u32, flags: u32, uuid: &[u8]) -> Result<()> {
     header.version[0] = DM_VERSION_MAJOR;
     header.data_size = size;
-    header.data_start = u32::try_from(size_of::<DmIoctl>()).unwrap();
+    header.data_start = u32::try_from(size_of::<DmIoctl>())?;
     header.flags = flags;
     header.uuid[..uuid.len()].copy_from_slice(uuid);
+    Ok(())
 }
 
 pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
@@ -74,7 +75,7 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
     if options.root.is_none() {
         return Ok(false);
     }
-    let root_device = options.root.as_ref().unwrap();
+    let root_device = options.root.as_ref().ok_or("No root device")?;
     if !Path::new(&root_device).exists() {
         return Ok(false);
     }
@@ -113,7 +114,9 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
     let dm_fd = f.into_raw_fd();
 
     let mut rand = [0u8; 16];
-    getrandom(&mut rand).unwrap();
+    if getrandom(&mut rand).is_err() {
+        return Err("Getrandom failed".into());
+    };
     let mut uuid_str = String::from("rdinit-verity-root-");
     for x in rand {
         uuid_str.push_str(format!("{:02x}", x).as_str());
@@ -126,10 +129,10 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
     let mut create_data: DmIoctl = unsafe { std::mem::zeroed() };
     init_header(
         &mut create_data,
-        u32::try_from(size_of::<DmIoctl>()).unwrap(),
+        u32::try_from(size_of::<DmIoctl>())?,
         0,
         uuid,
-    );
+    )?;
 
     let name = "verity-rootfs\0".as_bytes();
     create_data.name[..name.len()].copy_from_slice(name);
@@ -140,10 +143,10 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
     let mut table_load_data: DmTableLoad = unsafe { std::mem::zeroed() };
     init_header(
         &mut table_load_data.header,
-        u32::try_from(size_of::<DmTableLoad>()).unwrap(),
+        u32::try_from(size_of::<DmTableLoad>())?,
         DM_READONLY_FLAG,
         uuid,
-    );
+    )?;
     table_load_data.header.target_count = 1;
     table_load_data.target_spec.status = 0;
     table_load_data.target_spec.sector_start = 0;
@@ -163,10 +166,10 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
     let mut suspend_data: DmIoctl = unsafe { std::mem::zeroed() };
     init_header(
         &mut suspend_data,
-        u32::try_from(size_of::<DmIoctl>()).unwrap(),
+        u32::try_from(size_of::<DmIoctl>())?,
         0,
         uuid,
-    );
+    )?;
 
     unsafe { dm_dev_suspend(dm_fd, &mut suspend_data) }
         .map_err(|e| format!("Failed to suspend dm device: {e}"))?;

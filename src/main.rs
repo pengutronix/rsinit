@@ -2,7 +2,7 @@
 use cmdline::{parse_cmdline, CmdlineOptions};
 #[cfg(feature = "dmverity")]
 use dmverity::prepare_dmverity;
-use log::{debug, error, Level, LevelFilter, Metadata, Record};
+use log::{debug, Level, LevelFilter, Metadata, Record};
 use mount::{mount_move_special, mount_root, mount_special};
 #[cfg(feature = "reboot-on-failure")]
 use nix::sys::reboot::{reboot, RebootMode};
@@ -71,10 +71,8 @@ fn start_root(options: &mut CmdlineOptions) -> Result<()> {
     mount_systemd(options)?;
 
     if options.cleanup {
-        match current_exe() {
-            Err(e) => error!("current_exe failed: {e}"),
-            Ok(exe) => unlink(exe.as_path())?,
-        }
+        let exe = current_exe().map_err(|e| format!("current_exe failed: {e}"))?;
+        unlink(exe.as_path())?;
     }
 
     mount_move_special(options)?;
@@ -182,7 +180,7 @@ fn main() -> Result<()> {
         finalize();
     }));
 
-    let cmd = env::args().next().unwrap();
+    let cmd = env::args().next().ok_or("No cmd to run as found")?;
     println!("Running {cmd}...");
 
     if let Err(e) = match cmd.as_str() {
