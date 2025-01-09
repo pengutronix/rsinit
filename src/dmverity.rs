@@ -33,6 +33,25 @@ struct DmIoctl {
     data: [u8; 7],
 }
 
+impl Default for DmIoctl {
+    fn default() -> Self {
+        DmIoctl {
+            version: [0; 3],
+            data_size: u32::default(),
+            data_start: u32::default(),
+            target_count: u32::default(),
+            open_count: u32::default(),
+            flags: u32::default(),
+            event_nr: u32::default(),
+            padding: u32::default(),
+            dev: dev_t::default(),
+            name: [0; DM_NAME_LEN],
+            uuid: [0; DM_UUID_LEN],
+            data: [0; 7],
+        }
+    }
+}
+
 #[repr(C)]
 struct DmTargetSpec {
     sector_start: u64,
@@ -42,11 +61,33 @@ struct DmTargetSpec {
     target_type: [u8; DM_MAX_TYPE_NAME],
 }
 
+impl Default for DmTargetSpec {
+    fn default() -> Self {
+        DmTargetSpec {
+            sector_start: u64::default(),
+            length: u64::default(),
+            status: u32::default(),
+            next: u32::default(),
+            target_type: [0; DM_MAX_TYPE_NAME],
+        }
+    }
+}
+
 #[repr(C)]
 struct DmTableLoad {
     header: DmIoctl,
     target_spec: DmTargetSpec,
     params: [u8; 1024],
+}
+
+impl Default for DmTableLoad {
+    fn default() -> Self {
+        DmTableLoad {
+            header: DmIoctl::default(),
+            target_spec: DmTargetSpec::default(),
+            params: [0; 1024],
+        }
+    }
 }
 
 const DM_READONLY_FLAG: u32 = 1;
@@ -126,7 +167,7 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
     let len = usize::min(uuid_str.len(), DM_UUID_LEN - 1);
     let uuid = uuid_str[..len].as_bytes();
 
-    let mut create_data: DmIoctl = unsafe { std::mem::zeroed() };
+    let mut create_data = DmIoctl::default();
     init_header(
         &mut create_data,
         u32::try_from(size_of::<DmIoctl>())?,
@@ -140,7 +181,7 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
     unsafe { dm_dev_create(dm_fd, &mut create_data) }
         .map_err(|e| format!("Failed to create dm device: {e}"))?;
 
-    let mut table_load_data: DmTableLoad = unsafe { std::mem::zeroed() };
+    let mut table_load_data = DmTableLoad::default();
     init_header(
         &mut table_load_data.header,
         u32::try_from(size_of::<DmTableLoad>())?,
@@ -163,7 +204,7 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
     unsafe { dm_table_load(dm_fd, &mut table_load_data.header) }
         .map_err(|e| format!("Failed to load dm table: {e}"))?;
 
-    let mut suspend_data: DmIoctl = unsafe { std::mem::zeroed() };
+    let mut suspend_data = DmIoctl::default();
     init_header(
         &mut suspend_data,
         u32::try_from(size_of::<DmIoctl>())?,
