@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: GPL-2.0-only
-use crate::cmdline::CmdlineOptions;
-use crate::{read_file, Result};
+
+use std::fs::OpenOptions;
+use std::mem::size_of;
+use std::os::fd::IntoRawFd;
+use std::path::Path;
+
 use getrandom::getrandom;
 use log::debug;
 use nix::ioctl_readwrite;
 use nix::libc::dev_t;
 use nix::sys::stat::minor;
-use std::fs::OpenOptions;
-use std::mem::size_of;
-use std::os::fd::IntoRawFd;
-use std::path::Path;
+
+use crate::cmdline::CmdlineOptions;
+use crate::{read_file, Result};
 
 const DM_VERSION_MAJOR: u32 = 4;
 

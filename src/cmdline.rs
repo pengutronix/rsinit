@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
-use crate::{read_file, Result};
+
 use nix::mount::MsFlags;
+
+use crate::{read_file, Result};
 
 #[derive(Debug, PartialEq)]
 pub struct CmdlineOptions {
