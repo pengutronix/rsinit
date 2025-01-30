@@ -82,7 +82,7 @@ fn start_root(options: &mut CmdlineOptions) -> Result<()> {
     chdir("/")?;
 
     let mut args = Vec::new();
-    args.push(options.init.clone());
+    args.push(CString::new(options.init.as_str())?);
 
     for arg in env::args_os().skip(1) {
         let carg = CString::new(arg.as_bytes())?;
@@ -95,7 +95,7 @@ fn start_root(options: &mut CmdlineOptions) -> Result<()> {
     writeln!(buf, "...")?;
     debug!("{}", &buf);
 
-    execv(options.init.as_ref(), &args)?;
+    execv(&args[0], &args)?;
 
     Ok(())
 }
