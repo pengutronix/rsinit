@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-use std::fs::{read_dir, write};
+use std::fs::read_dir;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::symlink;
 use std::{thread, time};
@@ -9,11 +9,8 @@ use log::debug;
 
 use crate::cmdline::CmdlineOptions;
 use crate::mount::mount_apivfs;
-use crate::{mkdir, Result};
-
-fn write_file<C: AsRef<[u8]>>(path: &str, content: C) -> Result<()> {
-    write(path, content).map_err(|e| format!("Failed to write to {path}: {e}").into())
-}
+use crate::util::{mkdir, write_file};
+use crate::Result;
 
 fn setup_9pfs_gadget(device: &String) -> Result<()> {
     debug!("Initializing USB 9pfs gadget ...");
