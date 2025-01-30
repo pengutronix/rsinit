@@ -158,7 +158,7 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
     if getrandom(&mut rand).is_err() {
         return Err("Getrandom failed".into());
     };
-    let mut uuid_str = String::from("rdinit-verity-root-");
+    let mut uuid_str = String::from("rsinit-verity-root-");
     for x in rand {
         uuid_str.push_str(format!("{:02x}", x).as_str());
     }
