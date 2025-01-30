@@ -5,7 +5,7 @@ use std::env;
 use std::env::current_exe;
 use std::ffi::CString;
 use std::fmt::Write as _;
-use std::fs::{create_dir, read_to_string, File, OpenOptions};
+use std::fs::{File, OpenOptions};
 use std::io;
 use std::io::Write as _;
 use std::os::fd::{AsFd, AsRawFd, RawFd};
@@ -25,6 +25,7 @@ use nix::unistd::{chdir, chroot, dup2, execv, unlink};
 use systemd::{mount_systemd, shutdown};
 #[cfg(feature = "usb9pfs")]
 use usbg_9pfs::prepare_9pfs_gadget;
+use util::read_file;
 
 mod cmdline;
 #[cfg(feature = "dmverity")]
@@ -34,21 +35,9 @@ mod mount;
 mod systemd;
 #[cfg(feature = "usb9pfs")]
 mod usbg_9pfs;
+mod util;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-
-pub fn mkdir(dir: &str) -> Result<()> {
-    if let Err(e) = create_dir(dir) {
-        if e.kind() != io::ErrorKind::AlreadyExists {
-            return Err(format!("Failed to create {dir}: {e}",).into());
-        }
-    }
-    Ok(())
-}
-
-fn read_file(filename: &str) -> std::result::Result<String, String> {
-    read_to_string(filename).map_err(|e| format!("Failed to read {filename}: {e}"))
-}
 
 /*
  * Setup stdout/stderr. The kernel will create /dev/console in the

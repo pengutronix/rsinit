@@ -7,7 +7,8 @@ use log::debug;
 use nix::mount::{mount, MsFlags};
 
 use crate::cmdline::CmdlineOptions;
-use crate::{mkdir, Result};
+use crate::util::mkdir;
+use crate::Result;
 
 pub fn do_mount(
     src: Option<&str>,
