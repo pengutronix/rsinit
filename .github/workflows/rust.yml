@@ -5,18 +5,53 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  schedule:
+    - cron: '34 11 * * 2'
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
 
+  # Make sure cargo commands not only fail on hard errors but also on warnings
+  # so we do not accidentally miss newly introduced warnings.
+  RUSTFLAGS: -D warnings
+
 jobs:
-  build:
-
+  build-and-test:
+    strategy:
+      fail-fast: false # Run against all versions even if one fails
+      matrix:
+        version:
+          - "1.75" # Yocto scarthgap
+          - "1.79" # Yocto styhead
+          - "1.81" # OSELAS.Toolchain v2024.11.0
+          - "stable"
+          - "nightly"
+    name: cargo build && cargo test
     runs-on: ubuntu-24.04
-
     steps:
-    - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install ${{ matrix.version }}
+      - run: rustup run ${{ matrix.version }} cargo build --verbose
+      - run: rustup run ${{ matrix.version }} cargo test --verbose
+
+  clippy:
+    strategy:
+      matrix:
+        features:
+          - ""
+          - "--tests"
+    name: cargo clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable
+      - run: cargo clippy ${{ matrix.features }}
+
+  fmt:
+    name: cargo fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable
+      - run: cargo fmt --all -- --check
