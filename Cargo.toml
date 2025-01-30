@@ -3,6 +3,12 @@ name = "rsinit"
 version = "0.1.0"
 edition = "2021"
 license = "GPL-2.0-only"
+description = "minimalistic single binary initramfs init for embedded systems"
+homepage = "https://github.com/michaelolbrich/rsinit"
+repository = "https://github.com/michaelolbrich/rsinit"
+keywords = ["initramfs", "init", "rdinit"]
+categories = ["embedded"]
+readme = "README.md"
 
 [[bin]]
 name = "init"
