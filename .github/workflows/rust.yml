@@ -53,5 +53,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: rustup toolchain install stable
-      - run: cargo fmt --all -- --check
+      - run: rustup toolchain install nightly
+      - run: rustup component add --toolchain nightly rustfmt
+      - run: cargo +nightly fmt --all -- --check
