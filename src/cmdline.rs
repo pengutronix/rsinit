@@ -2,6 +2,7 @@
 use crate::{read_file, Result};
 use nix::mount::MsFlags;
 
+#[derive(Debug, PartialEq)]
 pub struct CmdlineOptions {
     pub root: Option<String>,
     pub rootfstype: Option<String>,
@@ -29,10 +30,7 @@ impl Default for CmdlineOptions {
 }
 
 fn ensure_value<'a>(key: &str, value: Option<&'a str>) -> Result<&'a str> {
-    match value {
-        None => Err(format!("Cmdline option '{key}' must have an argument!").into()),
-        Some(s) => Ok(s),
-    }
+    value.ok_or(format!("Cmdline option '{key}' must have an argument!").into())
 }
 
 fn parse_option(key: &str, value: Option<&str>, options: &mut CmdlineOptions) -> Result<()> {
@@ -90,7 +88,8 @@ fn parse_nfsroot(options: &mut CmdlineOptions) -> Result<()> {
     Ok(())
 }
 
-pub fn parse_cmdline(cmdline: String, options: &mut CmdlineOptions) -> Result<()> {
+pub fn parse_cmdline(cmdline: &str) -> Result<CmdlineOptions> {
+    let mut options = CmdlineOptions::default();
     let mut have_value = false;
     let mut quoted = false;
     let mut key = &cmdline[0..0];
@@ -124,7 +123,7 @@ pub fn parse_cmdline(cmdline: String, options: &mut CmdlineOptions) -> Result<()
                             } else {
                                 None
                             },
-                            options,
+                            &mut options,
                         )?;
                     }
                     key = &cmdline[0..0];
@@ -138,10 +137,12 @@ pub fn parse_cmdline(cmdline: String, options: &mut CmdlineOptions) -> Result<()
             start = i + 1;
         }
     }
+
     if options.root.as_deref() == Some("/dev/nfs") || options.rootfstype.as_deref() == Some("nfs") {
-        parse_nfsroot(options)?;
+        parse_nfsroot(&mut options)?;
     }
-    Ok(())
+
+    Ok(options)
 }
 
 #[cfg(test)]
@@ -150,95 +151,86 @@ mod tests {
 
     #[test]
     fn test_regular() {
-        let cmdline = String::from("root=/dev/mmcblk0p1 rw\n");
-        let mut options = CmdlineOptions {
+        let cmdline = "root=/dev/mmcblk0p1 rw\n";
+
+        let expected = CmdlineOptions {
+            root: Some("/dev/mmcblk0p1".into()),
+            rootfsflags: MsFlags::empty(),
             ..Default::default()
         };
 
-        parse_cmdline(cmdline, &mut options).expect("failed");
-        assert_eq!(options.root.as_deref(), Some("/dev/mmcblk0p1"));
-        assert!(options.rootfstype.is_none());
-        assert!(options.rootflags.is_none());
-        assert_eq!(options.rootfsflags, MsFlags::empty());
-        assert!(options.nfsroot.is_none());
-        assert_eq!(options.init, SBIN_INIT);
+        let options = parse_cmdline(cmdline).expect("failed");
+
+        assert_eq!(options, expected);
     }
 
     #[test]
     fn test_nfs() {
-        let cmdline = String::from("root=/dev/nfs nfsroot=192.168.42.23:/path/to/nfsroot,v3,tcp ip=dhcp console=ttymxc1,115200n8 rootwait ro\n");
-        let mut options = CmdlineOptions {
+        let cmdline = "root=/dev/nfs nfsroot=192.168.42.23:/path/to/nfsroot,v3,tcp ip=dhcp console=ttymxc1,115200n8 rootwait ro\n";
+
+        let expected = CmdlineOptions {
+            root: Some("192.168.42.23:/path/to/nfsroot".into()),
+            rootflags: Some("nolock,v3,tcp,addr=192.168.42.23".into()),
+            rootfsflags: MsFlags::MS_RDONLY,
+            nfsroot: Some("192.168.42.23:/path/to/nfsroot,v3,tcp".into()),
+            rootfstype: Some("nfs".into()),
             ..Default::default()
         };
 
-        parse_cmdline(cmdline, &mut options).expect("failed");
-        assert_eq!(
-            options.root.as_deref(),
-            Some("192.168.42.23:/path/to/nfsroot")
-        );
-        assert_eq!(options.rootfstype.as_deref(), Some("nfs"));
-        assert_eq!(
-            options.rootflags.as_deref(),
-            Some("nolock,v3,tcp,addr=192.168.42.23")
-        );
-        assert_eq!(options.rootfsflags, MsFlags::MS_RDONLY);
-        assert_eq!(
-            options.nfsroot.as_deref(),
-            Some("192.168.42.23:/path/to/nfsroot,v3,tcp")
-        );
-        assert_eq!(options.init, SBIN_INIT);
+        let options = parse_cmdline(cmdline).expect("failed");
+
+        assert_eq!(options, expected);
     }
 
     #[test]
     fn test_9p_qemu() {
-        let cmdline = String::from(
-            "root=/dev/root rootfstype=9p rootflags=trans=virtio console=ttyAMA0,115200\n",
-        );
-        let mut options = CmdlineOptions {
+        let cmdline =
+            "root=/dev/root rootfstype=9p rootflags=trans=virtio console=ttyAMA0,115200\n";
+
+        let expected = CmdlineOptions {
+            root: Some("/dev/root".into()),
+            rootfstype: Some("9p".into()),
+            rootflags: Some("trans=virtio".into()),
             ..Default::default()
         };
 
-        parse_cmdline(cmdline, &mut options).expect("failed");
-        assert_eq!(options.root.as_deref(), Some("/dev/root"));
-        assert_eq!(options.rootfstype.as_deref(), Some("9p"));
-        assert_eq!(options.rootflags.as_deref(), Some("trans=virtio"));
-        assert_eq!(options.rootfsflags, MsFlags::MS_RDONLY);
-        assert!(options.nfsroot.is_none());
-        assert_eq!(options.init, SBIN_INIT);
+        let options = parse_cmdline(cmdline).expect("failed");
+
+        assert_eq!(options, expected);
     }
 
     #[test]
     fn test_9p_usbg() {
-        let cmdline = String::from("root=rootdev rootfstype=9p rootflags=trans=usbg,cache=loose,uname=root,dfltuid=0,dfltgid=0,aname=/path/to/9pfsroot rw\n");
-        let mut options = CmdlineOptions {
+        let cmdline = "root=rootdev rootfstype=9p rootflags=trans=usbg,cache=loose,uname=root,dfltuid=0,dfltgid=0,aname=/path/to/9pfsroot rw\n";
+
+        let expected = CmdlineOptions {
+            root: Some("rootdev".into()),
+            rootfstype: Some("9p".into()),
+            rootflags: Some(
+                "trans=usbg,cache=loose,uname=root,dfltuid=0,dfltgid=0,aname=/path/to/9pfsroot"
+                    .into(),
+            ),
+            rootfsflags: MsFlags::empty(),
             ..Default::default()
         };
 
-        parse_cmdline(cmdline, &mut options).expect("failed");
-        assert_eq!(options.root.as_deref(), Some("rootdev"));
-        assert_eq!(options.rootfstype.as_deref(), Some("9p"));
-        assert_eq!(
-            options.rootflags.as_deref(),
-            Some("trans=usbg,cache=loose,uname=root,dfltuid=0,dfltgid=0,aname=/path/to/9pfsroot")
-        );
-        assert_eq!(options.rootfsflags, MsFlags::empty());
-        assert!(options.nfsroot.is_none());
-        assert_eq!(options.init, SBIN_INIT);
+        let options = parse_cmdline(cmdline).expect("failed");
+
+        assert_eq!(options, expected);
     }
 
     #[test]
     fn test_init() {
-        let cmdline = String::from("root=/dev/mmcblk0p1 init=/bin/sh\n");
-        let mut options = CmdlineOptions {
+        let cmdline = "root=/dev/mmcblk0p1 init=/bin/sh\n";
+
+        let expected = CmdlineOptions {
+            root: Some("/dev/mmcblk0p1".into()),
+            init: "/bin/sh".into(),
             ..Default::default()
         };
 
-        parse_cmdline(cmdline, &mut options).expect("failed");
-        assert_eq!(options.root.as_deref(), Some("/dev/mmcblk0p1"));
-        assert!(options.rootfstype.is_none());
-        assert!(options.rootflags.is_none());
-        assert_eq!(options.rootfsflags, MsFlags::MS_RDONLY);
-        assert!(options.nfsroot.is_none());
-        assert_eq!(options.init, "/bin/sh");
+        let options = parse_cmdline(cmdline).expect("failed");
+
+        assert_eq!(options, expected);
     }
 }

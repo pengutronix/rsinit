@@ -151,10 +151,8 @@ fn init() -> Result<()> {
     setup_log()?;
 
     let cmdline = read_file("/proc/cmdline")?;
-    let mut options = CmdlineOptions {
-        ..Default::default()
-    };
-    parse_cmdline(cmdline, &mut options)?;
+
+    let mut options = parse_cmdline(&cmdline)?;
 
     #[cfg(any(feature = "dmverity", feature = "usb9pfs"))]
     prepare_aux(&mut options)?;
