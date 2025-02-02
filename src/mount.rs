@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-only
-use crate::cmdline::CmdlineOptions;
-use crate::{mkdir, Result};
-use log::debug;
-use nix::mount::{mount, MsFlags};
+
 use std::fs::remove_dir;
 use std::path::Path;
+
+use log::debug;
+use nix::mount::{mount, MsFlags};
+
+use crate::cmdline::CmdlineOptions;
+use crate::{mkdir, Result};
 
 pub fn do_mount(
     src: Option<&str>,

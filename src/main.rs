@@ -1,13 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-use cmdline::{parse_cmdline, CmdlineOptions};
-#[cfg(feature = "dmverity")]
-use dmverity::prepare_dmverity;
-use log::{debug, Level, LevelFilter, Metadata, Record};
-use mount::{mount_move_special, mount_root, mount_special};
-#[cfg(feature = "reboot-on-failure")]
-use nix::sys::reboot::{reboot, RebootMode};
-use nix::sys::termios::tcdrain;
-use nix::unistd::{chdir, chroot, dup2, execv, unlink};
+
 use std::borrow::Borrow;
 use std::env;
 use std::env::current_exe;
@@ -19,6 +11,16 @@ use std::io::Write as _;
 use std::os::fd::{AsFd, AsRawFd, RawFd};
 use std::os::unix::ffi::OsStrExt;
 use std::panic::set_hook;
+
+use cmdline::{parse_cmdline, CmdlineOptions};
+#[cfg(feature = "dmverity")]
+use dmverity::prepare_dmverity;
+use log::{debug, Level, LevelFilter, Metadata, Record};
+use mount::{mount_move_special, mount_root, mount_special};
+#[cfg(feature = "reboot-on-failure")]
+use nix::sys::reboot::{reboot, RebootMode};
+use nix::sys::termios::tcdrain;
+use nix::unistd::{chdir, chroot, dup2, execv, unlink};
 #[cfg(feature = "systemd")]
 use systemd::{mount_systemd, shutdown};
 #[cfg(feature = "usb9pfs")]

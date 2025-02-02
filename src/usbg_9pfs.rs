@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0-only
-use crate::cmdline::CmdlineOptions;
-use crate::mount::mount_apivfs;
-use crate::{mkdir, Result};
-use log::debug;
+
 use std::fs::{read_dir, write};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::symlink;
 use std::{thread, time};
+
+use log::debug;
+
+use crate::cmdline::CmdlineOptions;
+use crate::mount::mount_apivfs;
+use crate::{mkdir, Result};
 
 fn write_file<C: AsRef<[u8]>>(path: &str, content: C) -> Result<()> {
     write(path, content).map_err(|e| format!("Failed to write to {path}: {e}").into())
