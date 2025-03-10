@@ -130,7 +130,7 @@ impl log::Log for KmsgLogger {
             /* 5 == notice has no equivalent */
             Level::Info => 6,
             Level::Debug | Level::Trace => 7,
-        } | 1 << 3;
+        } | (1 << 3);
         /* Format first to ensure that the whole message is written with
          * one write() system-call */
         let msg = format!("<{level}> rsinit: {}", record.args());
