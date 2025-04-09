@@ -11,6 +11,7 @@ use std::io::Write as _;
 use std::os::fd::{AsFd, AsRawFd, RawFd};
 use std::os::unix::ffi::OsStrExt;
 use std::panic::set_hook;
+use std::path::Path;
 
 use cmdline::{parse_cmdline, CmdlineOptions};
 #[cfg(feature = "dmverity")]
@@ -38,8 +39,8 @@ mod usbg_9pfs;
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 pub fn mkdir(dir: &str) -> Result<()> {
-    if let Err(e) = create_dir(dir) {
-        if e.kind() != io::ErrorKind::AlreadyExists {
+    if !Path::new(dir).exists() {
+        if let Err(e) = create_dir(dir) {
             return Err(format!("Failed to create {dir}: {e}",).into());
         }
     }
