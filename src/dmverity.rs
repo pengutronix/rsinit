@@ -12,7 +12,7 @@ use nix::libc::dev_t;
 use nix::sys::stat::minor;
 
 use crate::cmdline::CmdlineOptions;
-use crate::{read_file, Result};
+use crate::{read_file, wait_for_device, Result};
 
 const DM_VERSION_MAJOR: u32 = 4;
 
@@ -120,8 +120,9 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
         return Ok(false);
     }
     let root_device = options.root.as_ref().ok_or("No root device")?;
-    if !Path::new(&root_device).exists() {
-        return Ok(false);
+    match options.rootfstype.as_deref() {
+        Some("nfs") | Some("9p") => return Ok(false),
+        _ => wait_for_device(root_device)?,
     }
 
     let mut data_blocks = "";
