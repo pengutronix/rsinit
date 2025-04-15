@@ -168,7 +168,7 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
     uuid_str.push('-');
     uuid_str.push_str(root_device.rsplit_once('/').unwrap_or(("", root_device)).1);
     let len = usize::min(uuid_str.len(), DM_UUID_LEN - 1);
-    let uuid = uuid_str[..len].as_bytes();
+    let uuid = &uuid_str.as_bytes()[..len];
 
     let mut create_data = DmIoctl::default();
     init_header(
