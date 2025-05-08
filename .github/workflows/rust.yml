@@ -23,8 +23,8 @@ jobs:
       matrix:
         version:
           - "1.75" # Yocto scarthgap
-          - "1.79" # Yocto styhead
           - "1.81" # OSELAS.Toolchain v2024.11.0
+          - "1.84" # Yocto walnascar
           - "stable"
           - "nightly"
     name: cargo build && cargo test
