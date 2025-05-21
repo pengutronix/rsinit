@@ -8,7 +8,7 @@ use std::fmt::Write as _;
 use std::fs::{create_dir, read_to_string, File, OpenOptions};
 use std::io;
 use std::io::Write as _;
-use std::os::fd::{AsFd, AsRawFd, RawFd};
+use std::os::fd::AsFd;
 use std::os::unix::ffi::OsStrExt;
 use std::panic::set_hook;
 use std::path::Path;
@@ -21,7 +21,7 @@ use mount::{mount_move_special, mount_root, mount_special};
 #[cfg(feature = "reboot-on-failure")]
 use nix::sys::reboot::{reboot, RebootMode};
 use nix::sys::termios::tcdrain;
-use nix::unistd::{chdir, chroot, dup2, execv, unlink};
+use nix::unistd::{chdir, chroot, dup2_stderr, dup2_stdout, execv, unlink};
 #[cfg(feature = "systemd")]
 use systemd::{mount_systemd, shutdown};
 #[cfg(feature = "usb9pfs")]
@@ -59,10 +59,10 @@ fn read_file(filename: &str) -> std::result::Result<String, String> {
  */
 fn setup_console() -> Result<()> {
     let f = OpenOptions::new().write(true).open("/dev/console")?;
-    let raw_fd: RawFd = f.as_raw_fd();
+    let fd = f.as_fd();
 
-    dup2(raw_fd, io::stdout().as_raw_fd())?;
-    dup2(raw_fd, io::stderr().as_raw_fd())?;
+    dup2_stdout(fd)?;
+    dup2_stderr(fd)?;
 
     let _ = unlink("/dev/console");
 
