@@ -163,7 +163,7 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
     };
     let mut uuid_str = String::from("rsinit-verity-root-");
     for x in rand {
-        uuid_str.push_str(format!("{:02x}", x).as_str());
+        uuid_str.push_str(format!("{x:02x}").as_str());
     }
     uuid_str.push('-');
     uuid_str.push_str(root_device.rsplit_once('/').unwrap_or(("", root_device)).1);
