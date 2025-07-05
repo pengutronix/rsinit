@@ -97,7 +97,7 @@ pub fn parse_cmdline(cmdline: &str) -> Result<CmdlineOptions> {
     let mut key = &cmdline[0..0];
     let mut start = 0;
 
-    for (i, c) in cmdline.chars().enumerate() {
+    for (i, c) in cmdline.char_indices() {
         let mut skip = false;
         match c {
             '=' => {
