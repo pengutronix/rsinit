@@ -7,7 +7,7 @@ use log::debug;
 use nix::mount::{mount, MsFlags};
 
 use crate::cmdline::CmdlineOptions;
-use crate::{mkdir, Result};
+use crate::{mkdir, wait_for_device, Result};
 
 pub fn do_mount(
     src: Option<&str>,
@@ -45,10 +45,15 @@ pub fn mount_apivfs(dst: &str, fstype: &str) -> Result<()> {
 }
 
 pub fn mount_root(options: &CmdlineOptions) -> Result<()> {
-    if options.root.is_none() {
-        return Err("root= not found in /proc/cmdline".into());
-    }
+    let root = options
+        .root
+        .as_ref()
+        .ok_or("root= not found in /proc/cmdline")?;
 
+    match options.rootfstype.as_deref() {
+        Some("nfs") | Some("9p") => (),
+        _ => wait_for_device(root)?,
+    }
     mkdir("/root")?;
 
     debug!(
