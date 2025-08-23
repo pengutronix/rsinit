@@ -6,6 +6,8 @@ SPDX-License-Identifier: GPL-2.0-only
 rsinit
 ======
 
+[![REUSE status](https://api.reuse.software/badge/github.com/pengutronix/rsinit)](https://api.reuse.software/info/github.com/pengutronix/rsinit)
+
 rsinit is a minimalistic single binary init for the initramfs for embedded
 systems. It's main objective is to mount the root filesystem as fast as possible
 and then hand over to the actual init program.
