@@ -1,0 +1,22 @@
+version = 1
+
+# Config files etc.
+[[annotations]]
+path = [
+    ".github/workflows/rust.yml",
+    ".gitignore",
+    "Cargo.lock",
+    "REUSE.toml",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2024 The rsinit Authors"
+SPDX-License-Identifier = "CC0-1.0"
+
+# The AUTHORS file itself
+[[annotations]]
+path = [
+    "AUTHORS",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2025 The rsinit Authors"
+SPDX-License-Identifier = "CC0-1.0"

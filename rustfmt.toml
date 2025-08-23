@@ -1,1 +1,4 @@
+# SPDX-FileCopyrightText: 2024 The rsinit Authors
+# SPDX-License-Identifier: GPL-2.0-only
+
 group_imports = "StdExternalCrate" # requires nightly toolchain: cargo +nightly fmt
