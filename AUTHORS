@@ -1,0 +1,20 @@
+# This is the list of rsinit authors for copyright purposes.
+#
+# This does not necessarily list everyone who has contributed code.
+# To see the full list of contributors, see the revision history in source
+# control.
+
+# Please keep the list sorted.
+
+# Individual Authors:
+# Name <email address>
+Ahmad Fatoum <a.fatoum@pengutronix.de>
+Leonard Göhrs <leonard@goehrs.eu>
+Michael Olbrich <m.olbrich@pengutronix.de>
+Philipp Zabel <p.zabel@pengutronix.de>
+Rouven Czerwinski <rouven@czerwinskis.de>
+Stefan Kerkmann <s.kerkmann@pengutronix.de>
+
+# Organisations:
+# Organization <glob pattern> <fallback email address>
+Pengutronix <*@pengutronix.de> <entwicklung@pengutronix.de>
