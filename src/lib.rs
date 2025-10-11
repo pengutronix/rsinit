@@ -6,6 +6,8 @@ pub mod cmdline;
 pub mod dmverity;
 pub mod init;
 pub mod mount;
+#[cfg(feature = "readahead")]
+pub mod readahead;
 #[cfg(feature = "systemd")]
 pub mod systemd;
 #[cfg(feature = "usb9pfs")]
