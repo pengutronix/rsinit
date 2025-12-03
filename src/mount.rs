@@ -7,7 +7,6 @@ use std::path::Path;
 use log::debug;
 use nix::mount::{mount, MsFlags};
 
-use crate::cmdline::CmdlineOptions;
 use crate::util::{mkdir, wait_for_device, Result};
 
 pub fn do_mount(
@@ -45,13 +44,15 @@ pub fn mount_apivfs(dst: &str, fstype: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn mount_root(options: &CmdlineOptions) -> Result<()> {
-    let root = options
-        .root
-        .as_ref()
-        .ok_or("root= not found in /proc/cmdline")?;
+pub fn mount_root(
+    device: Option<&str>,
+    fstype: Option<&str>,
+    fsflags: MsFlags,
+    flags: Option<&str>,
+) -> Result<()> {
+    let root = device.as_ref().ok_or("root= not found in /proc/cmdline")?;
 
-    match options.rootfstype.as_deref() {
+    match fstype {
         Some("nfs") | Some("9p") => (),
         _ => wait_for_device(root)?,
     }
@@ -59,18 +60,12 @@ pub fn mount_root(options: &CmdlineOptions) -> Result<()> {
 
     debug!(
         "Mounting rootfs {} -> /root as {} with flags = {:#x}, data = '{}'",
-        options.root.as_deref().ok_or("No root device argument")?,
-        options.rootfstype.as_deref().unwrap_or_default(),
-        options.rootfsflags.bits(),
-        options.rootflags.as_deref().unwrap_or_default()
+        device.ok_or("No root device argument")?,
+        fstype.unwrap_or_default(),
+        fsflags.bits(),
+        flags.unwrap_or_default()
     );
-    do_mount(
-        options.root.as_deref(),
-        "/root",
-        options.rootfstype.as_deref(),
-        options.rootfsflags,
-        options.rootflags.as_deref(),
-    )?;
+    do_mount(device, "/root", fstype, fsflags, flags)?;
 
     Ok(())
 }
@@ -99,9 +94,9 @@ pub fn mount_special() -> Result<()> {
     Ok(())
 }
 
-pub fn mount_move_special(options: &CmdlineOptions) -> Result<()> {
-    mount_move("/dev", "/root/dev", options.cleanup)?;
-    mount_move("/sys", "/root/sys", options.cleanup)?;
-    mount_move("/proc", "/root/proc", options.cleanup)?;
+pub fn mount_move_special(cleanup: bool) -> Result<()> {
+    mount_move("/dev", "/root/dev", cleanup)?;
+    mount_move("/sys", "/root/sys", cleanup)?;
+    mount_move("/proc", "/root/proc", cleanup)?;
     Ok(())
 }

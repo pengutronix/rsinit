@@ -5,13 +5,13 @@ use std::env;
 
 extern crate rsinit;
 
-use rsinit::init::{finalize, init, setup_early};
+use rsinit::init::InitContext;
 #[cfg(feature = "systemd")]
 use rsinit::systemd::shutdown;
 use rsinit::util::Result;
 
 fn main() -> Result<()> {
-    setup_early()?;
+    let mut init = InitContext::new()?;
 
     let cmd = env::args().next().ok_or("No cmd to run as found")?;
     println!("Running {cmd}...");
@@ -19,10 +19,9 @@ fn main() -> Result<()> {
     if let Err(e) = match cmd.as_str() {
         #[cfg(feature = "systemd")]
         "/shutdown" => shutdown(),
-        _ => init(),
+        _ => init.run(),
     } {
         println!("{e}");
     }
-    finalize();
     Ok(())
 }

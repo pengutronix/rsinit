@@ -47,67 +47,6 @@ fn setup_console() -> Result<()> {
     Ok(())
 }
 
-pub fn setup_early() -> Result<()> {
-    setup_console()?;
-
-    set_hook(Box::new(|panic_info| {
-        println!("panic occurred: {panic_info}");
-        finalize();
-    }));
-
-    Ok(())
-}
-
-pub fn switch_root(options: &mut CmdlineOptions) -> Result<()> {
-    #[cfg(feature = "systemd")]
-    mount_systemd(options)?;
-
-    if options.cleanup {
-        let exe = current_exe().map_err(|e| format!("current_exe failed: {e}"))?;
-        unlink(exe.as_path())?;
-    }
-
-    mount_move_special(options)?;
-
-    chdir("/root")?;
-    chroot(".")?;
-    chdir("/")?;
-    Ok(())
-}
-
-pub fn start_init(options: &CmdlineOptions) -> Result<()> {
-    let mut args = Vec::new();
-    args.push(CString::new(options.init.as_str())?);
-
-    for arg in env::args_os().skip(1) {
-        let carg = CString::new(arg.as_bytes())?;
-        args.push(carg);
-    }
-    let mut buf = "Starting ".to_string();
-    for arg in &args {
-        write!(buf, "{} ", arg.to_bytes().escape_ascii())?;
-    }
-    writeln!(buf, "...")?;
-    debug!("{}", &buf);
-
-    execv(&args[0], &args)?;
-
-    Ok(())
-}
-
-#[cfg(any(feature = "dmverity", feature = "usb9pfs"))]
-pub fn prepare_aux(options: &mut CmdlineOptions) -> Result<()> {
-    #[cfg(feature = "dmverity")]
-    if prepare_dmverity(options)? {
-        return Ok(());
-    }
-    #[cfg(feature = "usb9pfs")]
-    if prepare_9pfs_gadget(options)? {
-        return Ok(());
-    }
-    Ok(())
-}
-
 struct KmsgLogger {
     kmsg: File,
 }
@@ -140,29 +79,125 @@ pub fn setup_log() -> Result<()> {
     Ok(())
 }
 
-pub fn init() -> Result<()> {
-    mount_special()?;
-
-    setup_log()?;
-
-    let cmdline = read_file("/proc/cmdline")?;
-
-    let mut options = parse_cmdline(&cmdline)?;
-
-    #[cfg(any(feature = "dmverity", feature = "usb9pfs"))]
-    prepare_aux(&mut options)?;
-
-    mount_root(&options)?;
-    switch_root(&mut options)?;
-
-    start_init(&options)?;
-
-    Ok(())
-}
-
-pub fn finalize() {
+fn finalize() {
     /* Make sure all output is written before exiting */
     let _ = tcdrain(io::stdout().as_fd());
     #[cfg(feature = "reboot-on-failure")]
     let _ = reboot(RebootMode::RB_AUTOBOOT);
+}
+
+pub struct InitContext {
+    pub options: CmdlineOptions,
+}
+
+impl InitContext {
+    pub fn new() -> Result<Self> {
+        setup_console()?;
+
+        set_hook(Box::new(|panic_info| {
+            println!("panic occurred: {panic_info}");
+            finalize();
+        }));
+
+        Ok(Self {
+            options: CmdlineOptions::default(),
+        })
+    }
+
+    pub fn setup(self: &mut InitContext) -> Result<()> {
+        mount_special()?;
+
+        setup_log()?;
+
+        let cmdline = read_file("/proc/cmdline")?;
+        self.options = parse_cmdline(&cmdline)?;
+
+        Ok(())
+    }
+
+    #[cfg(any(feature = "dmverity", feature = "usb9pfs"))]
+    pub fn prepare_aux(self: &mut InitContext) -> Result<()> {
+        #[cfg(feature = "dmverity")]
+        if prepare_dmverity(&mut self.options)? {
+            return Ok(());
+        }
+        #[cfg(feature = "usb9pfs")]
+        if prepare_9pfs_gadget(&self.options)? {
+            return Ok(());
+        }
+        Ok(())
+    }
+
+    pub fn switch_root(self: &mut InitContext) -> Result<()> {
+        #[cfg(feature = "systemd")]
+        mount_systemd(&mut self.options)?;
+
+        if self.options.cleanup {
+            let exe = current_exe().map_err(|e| format!("current_exe failed: {e}"))?;
+            unlink(exe.as_path())?;
+        }
+
+        mount_move_special(self.options.cleanup)?;
+
+        chdir("/root")?;
+        chroot(".")?;
+        chdir("/")?;
+        Ok(())
+    }
+
+    pub fn mount_root(self: &InitContext) -> Result<()> {
+        mount_root(
+            self.options.root.as_deref(),
+            self.options.rootfstype.as_deref(),
+            self.options.rootfsflags,
+            self.options.rootflags.as_deref(),
+        )?;
+        Ok(())
+    }
+
+    pub fn start_init(self: &InitContext) -> Result<()> {
+        let mut args = Vec::new();
+        args.push(CString::new(self.options.init.as_str())?);
+
+        for arg in env::args_os().skip(1) {
+            let carg = CString::new(arg.as_bytes())?;
+            args.push(carg);
+        }
+        let mut buf = "Starting ".to_string();
+        for arg in &args {
+            write!(buf, "{} ", arg.to_bytes().escape_ascii())?;
+        }
+        writeln!(buf, "...")?;
+        debug!("{}", &buf);
+
+        execv(&args[0], &args)?;
+
+        Ok(())
+    }
+
+    pub fn finish(self: &mut InitContext) -> Result<()> {
+        self.switch_root()?;
+        self.start_init()?;
+
+        Ok(())
+    }
+
+    pub fn run(self: &mut InitContext) -> Result<()> {
+        self.setup()?;
+
+        #[cfg(any(feature = "dmverity", feature = "usb9pfs"))]
+        self.prepare_aux()?;
+
+        self.mount_root()?;
+
+        self.finish()?;
+
+        Ok(())
+    }
+}
+
+impl Drop for InitContext {
+    fn drop(&mut self) {
+        finalize();
+    }
 }
