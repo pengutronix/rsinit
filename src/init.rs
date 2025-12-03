@@ -11,6 +11,7 @@ use std::io;
 use std::io::Write as _;
 use std::os::fd::AsFd;
 use std::os::unix::ffi::OsStrExt;
+use std::panic::set_hook;
 
 use log::{debug, Level, LevelFilter, Metadata, Record};
 #[cfg(feature = "reboot-on-failure")]
@@ -34,7 +35,7 @@ use crate::util::{read_file, Result};
  * Remove the device node since it is no longer needed and devtmpfs will be
  * mounted over it anyways.
  */
-pub fn setup_console() -> Result<()> {
+fn setup_console() -> Result<()> {
     let f = OpenOptions::new().write(true).open("/dev/console")?;
     let fd = f.as_fd();
 
@@ -42,6 +43,17 @@ pub fn setup_console() -> Result<()> {
     dup2_stderr(fd)?;
 
     let _ = unlink("/dev/console");
+
+    Ok(())
+}
+
+pub fn setup_early() -> Result<()> {
+    setup_console()?;
+
+    set_hook(Box::new(|panic_info| {
+        println!("panic occurred: {panic_info}");
+        finalize();
+    }));
 
     Ok(())
 }
