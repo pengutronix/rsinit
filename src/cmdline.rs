@@ -14,6 +14,7 @@ pub struct CmdlineOptions {
     pub nfsroot: Option<String>,
     pub init: String,
     pub cleanup: bool,
+    pub bind_mount: Vec<String>,
 }
 
 const SBIN_INIT: &str = "/sbin/init";
@@ -28,6 +29,7 @@ impl Default for CmdlineOptions {
             nfsroot: None,
             init: SBIN_INIT.into(),
             cleanup: true,
+            bind_mount: Vec::new(),
         }
     }
 }
@@ -45,6 +47,9 @@ fn parse_option(key: &str, value: Option<&str>, options: &mut CmdlineOptions) ->
         "rw" => options.rootfsflags.remove(MsFlags::MS_RDONLY),
         "nfsroot" => options.nfsroot = Some(ensure_value(key, value)?.to_string()),
         "init" => options.init = ensure_value(key, value)?.into(),
+        "rsinit.bind" => options
+            .bind_mount
+            .push(ensure_value(key, value)?.to_string()),
         _ => (),
     }
     Ok(())
@@ -229,6 +234,21 @@ mod tests {
         let expected = CmdlineOptions {
             root: Some("/dev/mmcblk0p1".into()),
             init: "/bin/sh".into(),
+            ..Default::default()
+        };
+
+        let options = parse_cmdline(cmdline).expect("failed");
+
+        assert_eq!(options, expected);
+    }
+
+    #[test]
+    fn test_rsinit_bind() {
+        let cmdline = "root=/dev/root rsinit.bind=/lib/modules rsinit.bind=/usr/lib/modules\n";
+
+        let expected = CmdlineOptions {
+            root: Some("/dev/root".into()),
+            bind_mount: vec!["/lib/modules".into(), "/usr/lib/modules".into()],
             ..Default::default()
         };
 

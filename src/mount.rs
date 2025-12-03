@@ -4,7 +4,7 @@
 use std::fs::remove_dir;
 use std::path::Path;
 
-use log::debug;
+use log::{debug, error};
 use nix::mount::{mount, MsFlags};
 
 use crate::cmdline::CmdlineOptions;
@@ -103,5 +103,22 @@ pub fn mount_move_special(options: &CmdlineOptions) -> Result<()> {
     mount_move("/dev", "/root/dev", options.cleanup)?;
     mount_move("/sys", "/root/sys", options.cleanup)?;
     mount_move("/proc", "/root/proc", options.cleanup)?;
+    Ok(())
+}
+
+pub fn mount_binds(options: &CmdlineOptions) -> Result<()> {
+    for src in &options.bind_mount {
+        if !Path::new(src).exists() {
+            error!("Can't bind mount {} as it doesn't exist", src);
+            continue;
+        }
+
+        let dst = format!("/root{src}");
+
+        debug!("Bind mounting {src} to {dst}");
+
+        do_mount(Some(src), &dst, None, MsFlags::MS_BIND, None)?;
+    }
+
     Ok(())
 }
