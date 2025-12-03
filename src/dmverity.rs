@@ -13,7 +13,7 @@ use nix::libc::dev_t;
 use nix::sys::stat::minor;
 
 use crate::cmdline::CmdlineOptions;
-use crate::{read_file, wait_for_device, Result};
+use crate::util::{read_file, wait_for_device, Result};
 
 const DM_VERSION_MAJOR: u32 = 4;
 

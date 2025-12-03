@@ -8,7 +8,7 @@ use log::debug;
 use nix::mount::{mount, MsFlags};
 
 use crate::cmdline::CmdlineOptions;
-use crate::{mkdir, wait_for_device, Result};
+use crate::util::{mkdir, wait_for_device, Result};
 
 pub fn do_mount(
     src: Option<&str>,

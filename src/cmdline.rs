@@ -3,7 +3,7 @@
 
 use nix::mount::MsFlags;
 
-use crate::{read_file, Result};
+use crate::util::{read_file, Result};
 
 #[derive(Debug, PartialEq)]
 pub struct CmdlineOptions {
