@@ -4,21 +4,12 @@
 use std::env;
 use std::panic::set_hook;
 
-use init::{finalize, init, setup_console};
-#[cfg(feature = "systemd")]
-use systemd::shutdown;
-use util::Result;
+extern crate rsinit;
 
-mod cmdline;
-#[cfg(feature = "dmverity")]
-mod dmverity;
-mod init;
-mod mount;
-#[cfg(feature = "usb9pfs")]
-mod usbg_9pfs;
+use rsinit::init::{finalize, init, setup_console};
 #[cfg(feature = "systemd")]
-mod systemd;
-mod util;
+use rsinit::systemd::shutdown;
+use rsinit::util::Result;
 
 fn main() -> Result<()> {
     setup_console()?;

@@ -13,6 +13,10 @@ keywords = ["initramfs", "init", "rdinit"]
 categories = ["embedded"]
 readme = "README.md"
 
+[lib]
+name = "rsinit"
+path = "src/lib.rs"
+
 [[bin]]
 name = "init"
 path = "src/main.rs"
