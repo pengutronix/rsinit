@@ -25,3 +25,59 @@ Currently supported root filesystems are:
    mount options
  * nfsroot
  * 9pfs with virtio transport (for QEMU)
+
+Cross compilation with cross.rs
+-------------------------------
+
+The project includes a Makefile for easy cross-compilation.
+
+### Prerequisites
+
+Before building, ensure you have the following tools installed:
+
+- [`cross`](https://github.com/cross-rs/cross) - Cross-compilation tool for Rust
+- [`rustup`](https://rustup.rs/) - Rust toolchain manager
+- [`podman`](https://podman.io/) or [`docker`](https://www.docker.com/) - Container runtime for cross
+- `cpio` - For creating cpio/initramfs archives
+- `gzip` - For compressing cpio/initramfs archives
+- A `nightly` Rust toolchain
+
+You can verify all dependencies are installed by running:
+
+```bash
+make check-toolchain
+```
+
+### Usage
+
+To see all available make targets and options:
+
+```bash
+make help
+```
+
+Common build commands:
+
+```bash
+# Build binaries and CPIO archives for all default targets
+make all
+
+# Build for a specific target only
+make aarch64-unknown-linux-musl-build
+
+# Create CPIO archive for a specific target
+make aarch64-unknown-linux-musl-cpio
+
+# Build with minimal profile (smaller binary size)
+make MINIMAL_BUILD=1 all
+
+# Use Docker instead of Podman
+make CROSS_CONTAINER_ENGINE=docker all
+```
+
+Default target architectures:
+- `aarch64-unknown-linux-musl`
+- `arm-unknown-linux-musleabihf`
+- `x86_64-unknown-linux-musl`
+
+Build artifacts are placed in `target/<arch>/<profile>/` directories.
