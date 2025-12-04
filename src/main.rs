@@ -30,6 +30,8 @@ use systemd::{mount_systemd, shutdown};
 #[cfg(feature = "usb9pfs")]
 use usbg_9pfs::prepare_9pfs_gadget;
 
+use crate::mount::mount_binds;
+
 mod cmdline;
 #[cfg(feature = "dmverity")]
 mod dmverity;
@@ -96,6 +98,7 @@ fn start_root(options: &mut CmdlineOptions) -> Result<()> {
         unlink(exe.as_path())?;
     }
 
+    mount_binds(options)?;
     mount_move_special(options)?;
 
     chdir("/root")?;
