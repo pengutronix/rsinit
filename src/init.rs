@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 use std::borrow::Borrow;
-use std::env;
 use std::env::current_exe;
 use std::ffi::CString;
 use std::fmt::Write as _;
@@ -12,6 +11,7 @@ use std::io::Write as _;
 use std::os::fd::AsFd;
 use std::os::unix::ffi::OsStrExt;
 use std::panic::set_hook;
+use std::{env, mem};
 
 use log::{debug, Level, LevelFilter, Metadata, Record};
 #[cfg(feature = "reboot-on-failure")]
@@ -86,12 +86,23 @@ fn finalize() {
     let _ = reboot(RebootMode::RB_AUTOBOOT);
 }
 
-pub struct InitContext {
-    pub options: CmdlineOptions,
+pub struct InitContext<'a> {
+    pub options: CmdlineOptions<'a>,
+    callbacks: InitContextCallbacks<'a>,
 }
 
-impl InitContext {
-    pub fn new() -> Result<Self> {
+pub type CmdlineCallback<'a> = dyn FnMut(&str, Option<&str>) -> Result<()> + 'a;
+pub type InitCallback<'a> = dyn FnMut(&mut CmdlineOptions) -> Result<()> + 'a;
+
+#[derive(Default)]
+pub struct InitContextCallbacks<'a> {
+    pub cmdline_cb: Vec<Box<CmdlineCallback<'a>>>,
+    pub post_setup_cb: Vec<Box<InitCallback<'a>>>,
+    pub post_root_mount_cb: Vec<Box<InitCallback<'a>>>,
+}
+
+impl<'a> InitContext<'a> {
+    pub fn new(callbacks: Option<InitContextCallbacks<'a>>) -> Result<Self> {
         setup_console()?;
 
         set_hook(Box::new(|panic_info| {
@@ -101,21 +112,39 @@ impl InitContext {
 
         Ok(Self {
             options: CmdlineOptions::default(),
+            callbacks: callbacks.unwrap_or_default(),
         })
     }
 
-    pub fn setup(self: &mut InitContext) -> Result<()> {
+    pub fn add_cmdline_cb(self: &mut InitContext<'a>, cmdline_cb: Box<CmdlineCallback<'a>>) {
+        self.callbacks.cmdline_cb.push(cmdline_cb);
+    }
+
+    pub fn add_post_setup_cb(self: &mut InitContext<'a>, post_setup_cb: Box<InitCallback<'a>>) {
+        self.callbacks.post_setup_cb.push(post_setup_cb);
+    }
+
+    pub fn add_post_root_mount_cb(
+        self: &mut InitContext<'a>,
+        post_root_mount_cb: Box<InitCallback<'a>>,
+    ) {
+        self.callbacks.post_root_mount_cb.push(post_root_mount_cb);
+    }
+
+    pub fn setup(self: &mut InitContext<'a>) -> Result<()> {
         mount_special()?;
 
         setup_log()?;
 
-        self.options = CmdlineOptions::from_file("/proc/cmdline")?;
+        let callbacks = mem::take(&mut self.callbacks.cmdline_cb);
+
+        self.options = CmdlineOptions::new_with_callbacks(callbacks).from_file("/proc/cmdline")?;
 
         Ok(())
     }
 
     #[cfg(any(feature = "dmverity", feature = "usb9pfs"))]
-    pub fn prepare_aux(self: &mut InitContext) -> Result<()> {
+    pub fn prepare_aux(self: &mut InitContext<'a>) -> Result<()> {
         #[cfg(feature = "dmverity")]
         if prepare_dmverity(&mut self.options)? {
             return Ok(());
@@ -127,7 +156,7 @@ impl InitContext {
         Ok(())
     }
 
-    pub fn switch_root(self: &mut InitContext) -> Result<()> {
+    pub fn switch_root(self: &mut InitContext<'a>) -> Result<()> {
         #[cfg(feature = "systemd")]
         mount_systemd(&mut self.options)?;
 
@@ -144,7 +173,7 @@ impl InitContext {
         Ok(())
     }
 
-    pub fn mount_root(self: &InitContext) -> Result<()> {
+    pub fn mount_root(self: &InitContext<'a>) -> Result<()> {
         mount_root(
             self.options.root.as_deref(),
             self.options.rootfstype.as_deref(),
@@ -154,7 +183,7 @@ impl InitContext {
         Ok(())
     }
 
-    pub fn start_init(self: &InitContext) -> Result<()> {
+    pub fn start_init(self: &InitContext<'a>) -> Result<()> {
         let mut args = Vec::new();
         args.push(CString::new(self.options.init.as_str())?);
 
@@ -174,20 +203,28 @@ impl InitContext {
         Ok(())
     }
 
-    pub fn finish(self: &mut InitContext) -> Result<()> {
+    pub fn finish(self: &mut InitContext<'a>) -> Result<()> {
         self.switch_root()?;
         self.start_init()?;
 
         Ok(())
     }
 
-    pub fn run(self: &mut InitContext) -> Result<()> {
+    pub fn run(self: &mut InitContext<'a>) -> Result<()> {
         self.setup()?;
+
+        for cb in &mut self.callbacks.post_setup_cb {
+            cb(&mut self.options)?;
+        }
 
         #[cfg(any(feature = "dmverity", feature = "usb9pfs"))]
         self.prepare_aux()?;
 
         self.mount_root()?;
+
+        for cb in &mut self.callbacks.post_root_mount_cb {
+            cb(&mut self.options)?;
+        }
 
         self.finish()?;
 
@@ -195,7 +232,7 @@ impl InitContext {
     }
 }
 
-impl Drop for InitContext {
+impl Drop for InitContext<'_> {
     fn drop(&mut self) {
         finalize();
     }
