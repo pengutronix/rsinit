@@ -19,7 +19,7 @@ use nix::sys::reboot::{reboot, RebootMode};
 use nix::sys::termios::tcdrain;
 use nix::unistd::{chdir, chroot, dup2_stderr, dup2_stdout, execv, unlink};
 
-use crate::cmdline::CmdlineOptions;
+use crate::cmdline::{CmdlineCallback, CmdlineOptions, CmdlineOptionsParser};
 #[cfg(feature = "dmverity")]
 use crate::dmverity::prepare_dmverity;
 use crate::mount::{
@@ -88,11 +88,12 @@ fn finalize() {
     let _ = reboot(RebootMode::RB_AUTOBOOT);
 }
 
-pub struct InitContext {
+pub struct InitContext<'a> {
     pub options: CmdlineOptions,
+    parser: CmdlineOptionsParser<'a>,
 }
 
-impl InitContext {
+impl<'a> InitContext<'a> {
     pub fn new() -> Result<Self> {
         setup_console()?;
 
@@ -103,21 +104,50 @@ impl InitContext {
 
         Ok(Self {
             options: CmdlineOptions::default(),
+            parser: CmdlineOptionsParser::new(),
         })
     }
 
-    pub fn setup(self: &mut InitContext) -> Result<()> {
+    /// Register a command line parser callback for every option the built-in parser does not
+    /// handle itself. Use [`crate::cmdline::ensure_value`] when your option requires an argument.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use std::cell::RefCell;
+    /// use rsinit::cmdline::ensure_value;
+    /// use rsinit::init::InitContext;
+    ///
+    /// let mut custom_option = RefCell::new(String::new());
+    /// let mut ctx = InitContext::new()?;
+    ///
+    /// ctx.add_cmdline_parser_callback(Box::new(|key, val| {
+    ///     if key == "my.option" {
+    ///         *custom_option.borrow_mut() = ensure_value(key, val)?.to_owned();
+    ///     }
+    ///     Ok(())
+    /// }));
+    ///
+    /// // When `setup()` parses /proc/cmdline, the callback will be invoked
+    /// ctx.setup()?;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn add_cmdline_parser_callback(&mut self, cb: Box<CmdlineCallback<'a>>) {
+        self.parser.add_callback(cb);
+    }
+
+    pub fn setup(&mut self) -> Result<()> {
         mount_special()?;
 
         setup_log()?;
 
-        self.options = CmdlineOptions::from_file("/proc/cmdline")?;
+        self.options = self.parser.parse_file("/proc/cmdline")?;
 
         Ok(())
     }
 
     #[cfg(any(feature = "dmverity", feature = "usb9pfs"))]
-    pub fn prepare_aux(self: &mut InitContext) -> Result<()> {
+    pub fn prepare_aux(self: &mut InitContext<'a>) -> Result<()> {
         #[cfg(feature = "dmverity")]
         if prepare_dmverity(&mut self.options)? {
             return Ok(());
@@ -129,7 +159,7 @@ impl InitContext {
         Ok(())
     }
 
-    pub fn switch_root(self: &mut InitContext) -> Result<()> {
+    pub fn switch_root(self: &mut InitContext<'a>) -> Result<()> {
         #[cfg(feature = "systemd")]
         mount_systemd(&mut self.options)?;
 
@@ -146,7 +176,7 @@ impl InitContext {
         Ok(())
     }
 
-    pub fn mount_root(self: &InitContext) -> Result<()> {
+    pub fn mount_root(self: &InitContext<'a>) -> Result<()> {
         mount_root(
             self.options.root.as_deref(),
             self.options.rootfstype.as_deref(),
@@ -156,15 +186,19 @@ impl InitContext {
         Ok(())
     }
 
-    pub fn mount_tmpfs_root_overlay(self: &InitContext) -> Result<()> {
+    pub fn mount_tmpfs_root_overlay(self: &InitContext<'a>) -> Result<()> {
         mount_tmpfs_overlay(self.options.rootfsflags, "/")
     }
 
-    pub fn mount_root_overlay(self: &InitContext, data: Option<&str>, upper: &str) -> Result<()> {
+    pub fn mount_root_overlay(
+        self: &InitContext<'a>,
+        data: Option<&str>,
+        upper: &str,
+    ) -> Result<()> {
         mount_overlay(self.options.rootfsflags, data, upper, "/")
     }
 
-    pub fn start_init(self: &InitContext) -> Result<()> {
+    pub fn start_init(self: &InitContext<'a>) -> Result<()> {
         let mut args = Vec::new();
         args.push(CString::new(self.options.init.as_str())?);
 
@@ -184,14 +218,14 @@ impl InitContext {
         Ok(())
     }
 
-    pub fn finish(self: &mut InitContext) -> Result<()> {
+    pub fn finish(self: &mut InitContext<'a>) -> Result<()> {
         self.switch_root()?;
         self.start_init()?;
 
         Ok(())
     }
 
-    pub fn run(self: &mut InitContext) -> Result<()> {
+    pub fn run(self: &mut InitContext<'a>) -> Result<()> {
         self.setup()?;
 
         #[cfg(any(feature = "dmverity", feature = "usb9pfs"))]
@@ -205,7 +239,7 @@ impl InitContext {
     }
 }
 
-impl Drop for InitContext {
+impl Drop for InitContext<'_> {
     fn drop(&mut self) {
         finalize();
     }

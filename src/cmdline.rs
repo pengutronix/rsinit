@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2024 The rsinit Authors
 // SPDX-License-Identifier: GPL-2.0-only
 
+use std::fmt::Debug;
+
 use nix::mount::MsFlags;
 
 use crate::util::{read_file, Result};
@@ -32,11 +34,16 @@ impl Default for CmdlineOptions {
     }
 }
 
-fn ensure_value<'a>(key: &str, value: Option<&'a str>) -> Result<&'a str> {
+pub fn ensure_value<'a>(key: &str, value: Option<&'a str>) -> Result<&'a str> {
     value.ok_or(format!("Cmdline option '{key}' must have an argument!").into())
 }
 
-fn parse_option(key: &str, value: Option<&str>, options: &mut CmdlineOptions) -> Result<()> {
+fn parse_option<'a>(
+    key: &str,
+    value: Option<&str>,
+    options: &mut CmdlineOptions,
+    callbacks: &mut [Box<CmdlineCallback<'a>>],
+) -> Result<()> {
     match key {
         "root" => options.root = Some(ensure_value(key, value)?.to_string()),
         "rootfstype" => options.rootfstype = Some(ensure_value(key, value)?.to_string()),
@@ -45,7 +52,11 @@ fn parse_option(key: &str, value: Option<&str>, options: &mut CmdlineOptions) ->
         "rw" => options.rootfsflags.remove(MsFlags::MS_RDONLY),
         "nfsroot" => options.nfsroot = Some(ensure_value(key, value)?.to_string()),
         "init" => options.init = ensure_value(key, value)?.into(),
-        _ => (),
+        _ => {
+            for cb in callbacks {
+                cb(key, value)?
+            }
+        }
     }
     Ok(())
 }
@@ -91,9 +102,29 @@ fn parse_nfsroot(options: &mut CmdlineOptions) -> Result<()> {
     Ok(())
 }
 
-impl CmdlineOptions {
-    pub fn from_string(cmdline: &str) -> Result<Self> {
-        let mut options = Self::default();
+pub type CmdlineCallback<'a> = dyn FnMut(&str, Option<&str>) -> Result<()> + 'a;
+
+#[derive(Default)]
+pub struct CmdlineOptionsParser<'a> {
+    callbacks: Vec<Box<CmdlineCallback<'a>>>,
+}
+
+impl<'a> CmdlineOptionsParser<'a> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn add_callback(&mut self, cb: Box<CmdlineCallback<'a>>) {
+        self.callbacks.push(cb);
+    }
+
+    pub fn parse_file(&mut self, path: &str) -> Result<CmdlineOptions> {
+        let cmdline = read_file(path)?;
+        self.parse_string(&cmdline)
+    }
+
+    pub fn parse_string(&mut self, cmdline: &str) -> Result<CmdlineOptions> {
+        let mut options = CmdlineOptions::default();
         let mut have_value = false;
         let mut quoted = false;
         let mut key = &cmdline[0..0];
@@ -128,6 +159,7 @@ impl CmdlineOptions {
                                     None
                                 },
                                 &mut options,
+                                &mut self.callbacks,
                             )?;
                         }
                         key = &cmdline[0..0];
@@ -150,11 +182,6 @@ impl CmdlineOptions {
 
         Ok(options)
     }
-
-    pub fn from_file(filename: &str) -> Result<Self> {
-        let cmdline = read_file(filename)?;
-        Self::from_string(&cmdline)
-    }
 }
 
 #[cfg(test)]
@@ -171,7 +198,9 @@ mod tests {
             ..Default::default()
         };
 
-        let options = CmdlineOptions::from_string(cmdline).expect("failed");
+        let options = CmdlineOptionsParser::new()
+            .parse_string(cmdline)
+            .expect("failed");
 
         assert_eq!(options, expected);
     }
@@ -189,7 +218,9 @@ mod tests {
             ..Default::default()
         };
 
-        let options = CmdlineOptions::from_string(cmdline).expect("failed");
+        let options = CmdlineOptionsParser::new()
+            .parse_string(cmdline)
+            .expect("failed");
 
         assert_eq!(options, expected);
     }
@@ -206,7 +237,9 @@ mod tests {
             ..Default::default()
         };
 
-        let options = CmdlineOptions::from_string(cmdline).expect("failed");
+        let options = CmdlineOptionsParser::new()
+            .parse_string(cmdline)
+            .expect("failed");
 
         assert_eq!(options, expected);
     }
@@ -226,7 +259,9 @@ mod tests {
             ..Default::default()
         };
 
-        let options = CmdlineOptions::from_string(cmdline).expect("failed");
+        let options = CmdlineOptionsParser::new()
+            .parse_string(cmdline)
+            .expect("failed");
 
         assert_eq!(options, expected);
     }
@@ -241,8 +276,30 @@ mod tests {
             ..Default::default()
         };
 
-        let options = CmdlineOptions::from_string(cmdline).expect("failed");
+        let options = CmdlineOptionsParser::new()
+            .parse_string(cmdline)
+            .expect("failed");
 
         assert_eq!(options, expected);
+    }
+
+    #[test]
+    fn test_custom_option() {
+        let cmdline = "root=/dev/mmcblk0p1 rsinit.custom=xyz\n";
+        let custom_option = std::cell::RefCell::new(String::new());
+
+        let cb = Box::new(|key: &str, value: Option<&str>| {
+            if key == "rsinit.custom" {
+                *custom_option.borrow_mut() = ensure_value(key, value)?.to_owned();
+            }
+            Ok(())
+        });
+
+        let mut parser = CmdlineOptionsParser::new();
+        parser.add_callback(cb);
+
+        let _ = parser.parse_string(cmdline).expect("failed");
+
+        assert_eq!(&*custom_option.borrow(), "xyz");
     }
 }
