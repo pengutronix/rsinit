@@ -19,7 +19,7 @@ use nix::sys::reboot::{reboot, RebootMode};
 use nix::sys::termios::tcdrain;
 use nix::unistd::{chdir, chroot, dup2_stderr, dup2_stdout, execv, unlink};
 
-use crate::cmdline::{parse_cmdline, CmdlineOptions};
+use crate::cmdline::CmdlineOptions;
 #[cfg(feature = "dmverity")]
 use crate::dmverity::prepare_dmverity;
 use crate::mount::{mount_move_special, mount_root, mount_special};
@@ -27,7 +27,7 @@ use crate::mount::{mount_move_special, mount_root, mount_special};
 use crate::systemd::mount_systemd;
 #[cfg(feature = "usb9pfs")]
 use crate::usbg_9pfs::prepare_9pfs_gadget;
-use crate::util::{read_file, Result};
+use crate::util::Result;
 
 /*
  * Setup stdout/stderr. The kernel will create /dev/console in the
@@ -109,8 +109,7 @@ impl InitContext {
 
         setup_log()?;
 
-        let cmdline = read_file("/proc/cmdline")?;
-        self.options = parse_cmdline(&cmdline)?;
+        self.options = CmdlineOptions::from_file("/proc/cmdline")?;
 
         Ok(())
     }

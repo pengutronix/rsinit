@@ -91,61 +91,70 @@ fn parse_nfsroot(options: &mut CmdlineOptions) -> Result<()> {
     Ok(())
 }
 
-pub fn parse_cmdline(cmdline: &str) -> Result<CmdlineOptions> {
-    let mut options = CmdlineOptions::default();
-    let mut have_value = false;
-    let mut quoted = false;
-    let mut key = &cmdline[0..0];
-    let mut start = 0;
+impl CmdlineOptions {
+    pub fn from_string(cmdline: &str) -> Result<Self> {
+        let mut options = Self::default();
+        let mut have_value = false;
+        let mut quoted = false;
+        let mut key = &cmdline[0..0];
+        let mut start = 0;
 
-    for (i, c) in cmdline.char_indices() {
-        let mut skip = false;
-        match c {
-            '=' => {
-                if !have_value {
-                    skip = true;
-                    key = &cmdline[start..i];
-                    start = i;
-                }
-                have_value = true;
-            }
-            '"' => {
-                quoted = !quoted;
-                skip = true;
-            }
-            ' ' | '\n' => {
-                if !quoted {
+        for (i, c) in cmdline.char_indices() {
+            let mut skip = false;
+            match c {
+                '=' => {
                     if !have_value {
+                        skip = true;
                         key = &cmdline[start..i];
+                        start = i;
                     }
-                    if !key.is_empty() {
-                        parse_option(
-                            key,
-                            if have_value {
-                                Some(&cmdline[start..i])
-                            } else {
-                                None
-                            },
-                            &mut options,
-                        )?;
-                    }
-                    key = &cmdline[0..0];
-                    have_value = false;
+                    have_value = true;
+                }
+                '"' => {
+                    quoted = !quoted;
                     skip = true;
                 }
+                ' ' | '\n' => {
+                    if !quoted {
+                        if !have_value {
+                            key = &cmdline[start..i];
+                        }
+                        if !key.is_empty() {
+                            parse_option(
+                                key,
+                                if have_value {
+                                    Some(&cmdline[start..i])
+                                } else {
+                                    None
+                                },
+                                &mut options,
+                            )?;
+                        }
+                        key = &cmdline[0..0];
+                        have_value = false;
+                        skip = true;
+                    }
+                }
+                _ => {}
             }
-            _ => {}
+            if skip {
+                start = i + 1;
+            }
         }
-        if skip {
-            start = i + 1;
+
+        if options.root.as_deref() == Some("/dev/nfs")
+            || options.rootfstype.as_deref() == Some("nfs")
+        {
+            parse_nfsroot(&mut options)?;
         }
+
+        Ok(options)
     }
 
-    if options.root.as_deref() == Some("/dev/nfs") || options.rootfstype.as_deref() == Some("nfs") {
-        parse_nfsroot(&mut options)?;
+    pub fn from_file(filename: &str) -> Result<Self> {
+        let cmdline = read_file(filename)?;
+        Self::from_string(&cmdline)
     }
-
-    Ok(options)
 }
 
 #[cfg(test)]
@@ -162,7 +171,7 @@ mod tests {
             ..Default::default()
         };
 
-        let options = parse_cmdline(cmdline).expect("failed");
+        let options = CmdlineOptions::from_string(cmdline).expect("failed");
 
         assert_eq!(options, expected);
     }
@@ -180,7 +189,7 @@ mod tests {
             ..Default::default()
         };
 
-        let options = parse_cmdline(cmdline).expect("failed");
+        let options = CmdlineOptions::from_string(cmdline).expect("failed");
 
         assert_eq!(options, expected);
     }
@@ -197,7 +206,7 @@ mod tests {
             ..Default::default()
         };
 
-        let options = parse_cmdline(cmdline).expect("failed");
+        let options = CmdlineOptions::from_string(cmdline).expect("failed");
 
         assert_eq!(options, expected);
     }
@@ -217,7 +226,7 @@ mod tests {
             ..Default::default()
         };
 
-        let options = parse_cmdline(cmdline).expect("failed");
+        let options = CmdlineOptions::from_string(cmdline).expect("failed");
 
         assert_eq!(options, expected);
     }
@@ -232,7 +241,7 @@ mod tests {
             ..Default::default()
         };
 
-        let options = parse_cmdline(cmdline).expect("failed");
+        let options = CmdlineOptions::from_string(cmdline).expect("failed");
 
         assert_eq!(options, expected);
     }
