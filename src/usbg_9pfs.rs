@@ -10,7 +10,7 @@ use log::debug;
 
 use crate::cmdline::CmdlineOptions;
 use crate::mount::mount_apivfs;
-use crate::{mkdir, Result};
+use crate::util::{mkdir, Result};
 
 fn write_file<C: AsRef<[u8]>>(path: &str, content: C) -> Result<()> {
     write(path, content).map_err(|e| format!("Failed to write to {path}: {e}").into())

@@ -11,7 +11,7 @@ use nix::sys::reboot::{reboot, RebootMode};
 
 use crate::cmdline::CmdlineOptions;
 use crate::mount::do_mount;
-use crate::{mkdir, Result};
+use crate::util::{mkdir, Result};
 
 pub fn mount_systemd(options: &mut CmdlineOptions) -> Result<()> {
     do_mount(

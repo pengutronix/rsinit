@@ -26,6 +26,32 @@ Currently supported root filesystems are:
  * nfsroot
  * 9pfs with virtio transport (for QEMU)
 
+Design Choices
+--------------
+
+### Binary Size
+
+One important design goal for rsinit is to be as fast as possible. For cases
+where the kernel can mount the same root filesystem directly, booting with
+rsinit should be just as fast as booting without it.
+
+To achieve this, the initramfs must be as small as possible. Changes that
+significantly increase the binary size of rsinit are not acceptable. Crates
+that wrap external (C) libraries cannot be used.
+
+In general, the binary size should be kept in mind when making any changes.
+
+### Configuration and Features
+
+rsinit itself will only cover the simple use-cases to mount the root
+filesystem and related generic tasks with minimal runtime and build time
+configuration.
+
+For more complex use-cases, e.g. to mount additional (overlay) filesystems,
+rsinit can be used as a crate in a custom rust application. The code is
+structured in a way that makes it possible to reuse the existing code and add
+new functionality as needed.
+
 Cross compilation with cross.rs
 -------------------------------
 
