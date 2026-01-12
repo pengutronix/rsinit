@@ -5,7 +5,7 @@ use std::fs::remove_dir;
 use std::path::Path;
 
 use log::debug;
-use nix::mount::{mount, MsFlags};
+use nix::mount::{mount, umount, MsFlags};
 
 use crate::util::{mkdir, wait_for_device, Result};
 
@@ -98,5 +98,59 @@ pub fn mount_move_special(cleanup: bool) -> Result<()> {
     mount_move("/dev", "/root/dev", cleanup)?;
     mount_move("/sys", "/root/sys", cleanup)?;
     mount_move("/proc", "/root/proc", cleanup)?;
+    Ok(())
+}
+
+pub fn mount_overlay(
+    flags: MsFlags,
+    data: Option<&str>,
+    upper: &str,
+    mountpoint: &str,
+) -> Result<()> {
+    let upperdir = format!("{upper}/upperdir");
+    let workdir = format!("{upper}/workdir");
+    let options = data.unwrap_or("");
+
+    if !mountpoint.starts_with("/") {
+        return Err(format!("Mountpoint '{mountpoint}' for overlays must start with a '/'").into());
+    }
+    let mountdir = format!("/root{mountpoint}");
+
+    mkdir(&upperdir)?;
+    mkdir(&workdir)?;
+
+    do_mount(
+        Option::<&str>::None,
+        &mountdir,
+        Some("overlay"),
+        flags,
+        Some(
+            format!("lowerdir={mountdir},upperdir={upperdir},workdir={workdir},{options}").as_str(),
+        ),
+    )?;
+    Ok(())
+}
+
+pub fn mount_tmpfs_overlay(overlayflags: MsFlags, mountpoint: &str) -> Result<()> {
+    let dir = "/.overlay";
+
+    mkdir(dir)?;
+    do_mount(
+        Option::<&str>::None,
+        dir,
+        Some("tmpfs"),
+        MsFlags::empty(),
+        Some("mode=0755"),
+    )?;
+
+    mount_overlay(
+        overlayflags,
+        Some("redirect_dir=on,index=on,metacopy=on,volatile"),
+        dir,
+        mountpoint,
+    )?;
+    umount(dir).map_err(|e| format!("Failed to unmount {dir}: {e}"))?;
+    remove_dir(dir)?;
+
     Ok(())
 }
