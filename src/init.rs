@@ -22,7 +22,9 @@ use nix::unistd::{chdir, chroot, dup2_stderr, dup2_stdout, execv, unlink};
 use crate::cmdline::CmdlineOptions;
 #[cfg(feature = "dmverity")]
 use crate::dmverity::prepare_dmverity;
-use crate::mount::{mount_move_special, mount_root, mount_special};
+use crate::mount::{
+    mount_move_special, mount_overlay, mount_root, mount_special, mount_tmpfs_overlay,
+};
 #[cfg(feature = "systemd")]
 use crate::systemd::mount_systemd;
 #[cfg(feature = "usb9pfs")]
@@ -152,6 +154,14 @@ impl InitContext {
             self.options.rootflags.as_deref(),
         )?;
         Ok(())
+    }
+
+    pub fn mount_tmpfs_root_overlay(self: &InitContext) -> Result<()> {
+        mount_tmpfs_overlay(self.options.rootfsflags, "/")
+    }
+
+    pub fn mount_root_overlay(self: &InitContext, data: Option<&str>, upper: &str) -> Result<()> {
+        mount_overlay(self.options.rootfsflags, data, upper, "/")
     }
 
     pub fn start_init(self: &InitContext) -> Result<()> {
