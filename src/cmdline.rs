@@ -7,6 +7,10 @@ use nix::mount::MsFlags;
 
 use crate::util::{read_file, Result};
 
+pub fn ensure_value<'a>(key: &str, value: Option<&'a str>) -> Result<&'a str> {
+    value.ok_or(format!("Cmdline option '{key}' must have an argument!").into())
+}
+
 #[derive(Debug, PartialEq)]
 pub struct CmdlineOptions {
     pub root: Option<String>,
@@ -18,8 +22,6 @@ pub struct CmdlineOptions {
     pub cleanup: bool,
 }
 
-const SBIN_INIT: &str = "/sbin/init";
-
 impl Default for CmdlineOptions {
     fn default() -> CmdlineOptions {
         CmdlineOptions {
@@ -28,78 +30,80 @@ impl Default for CmdlineOptions {
             rootflags: None,
             rootfsflags: MsFlags::MS_RDONLY,
             nfsroot: None,
-            init: SBIN_INIT.into(),
+            init: "/sbin/init".into(),
             cleanup: true,
         }
     }
 }
 
-pub fn ensure_value<'a>(key: &str, value: Option<&'a str>) -> Result<&'a str> {
-    value.ok_or(format!("Cmdline option '{key}' must have an argument!").into())
-}
-
-fn parse_option<'a>(
-    key: &str,
-    value: Option<&str>,
-    options: &mut CmdlineOptions,
-    callbacks: &mut [Box<CmdlineCallback<'a>>],
-) -> Result<()> {
-    match key {
-        "root" => options.root = Some(ensure_value(key, value)?.to_string()),
-        "rootfstype" => options.rootfstype = Some(ensure_value(key, value)?.to_string()),
-        "rootflags" => options.rootflags = value.map(str::to_string),
-        "ro" => options.rootfsflags.insert(MsFlags::MS_RDONLY),
-        "rw" => options.rootfsflags.remove(MsFlags::MS_RDONLY),
-        "nfsroot" => options.nfsroot = Some(ensure_value(key, value)?.to_string()),
-        "init" => options.init = ensure_value(key, value)?.into(),
-        _ => {
-            for cb in callbacks {
-                cb(key, value)?
-            }
-        }
-    }
-    Ok(())
-}
-
-fn parse_nfsroot(options: &mut CmdlineOptions) -> Result<()> {
-    let nfsroot_option = options
-        .nfsroot
-        .as_ref()
-        .ok_or("Missing nfsroot command-line option!")?;
-    let mut rootflags = String::from("nolock");
-    let mut nfsroot = match nfsroot_option.split_once(',') {
-        None => nfsroot_option.to_string(),
-        Some((root, flags)) => {
-            rootflags.push(',');
-            rootflags.push_str(flags);
-            root.to_string()
-        }
-    };
-    rootflags.push_str(",addr=");
-    if !nfsroot.contains(':') {
-        let pnp = read_file("/proc/net/pnp")?;
-        for line in pnp.lines() {
-            match line.split_once(' ') {
-                None => continue,
-                Some((key, value)) => {
-                    if key == "bootserver" {
-                        nfsroot = value.to_owned() + ":" + &nfsroot;
-                        rootflags.push_str(value);
-                        break;
-                    }
+impl CmdlineOptions {
+    fn parse_option<'a>(
+        &mut self,
+        key: &str,
+        value: Option<&str>,
+        callbacks: &mut [Box<CmdlineCallback<'a>>],
+    ) -> Result<()> {
+        match key {
+            "root" => self.root = Some(ensure_value(key, value)?.to_string()),
+            "rootfstype" => self.rootfstype = Some(ensure_value(key, value)?.to_string()),
+            "rootflags" => self.rootflags = value.map(str::to_string),
+            "ro" => self.rootfsflags.insert(MsFlags::MS_RDONLY),
+            "rw" => self.rootfsflags.remove(MsFlags::MS_RDONLY),
+            "nfsroot" => self.nfsroot = Some(ensure_value(key, value)?.to_string()),
+            "init" => self.init = ensure_value(key, value)?.into(),
+            _ => {
+                for cb in callbacks {
+                    cb(key, value)?
                 }
             }
         }
-    } else {
-        let (bootserver, _) = nfsroot
-            .split_once(':')
-            .ok_or("Failed to split out path from nfsroot parameter")?;
-        rootflags.push_str(bootserver);
+        Ok(())
     }
-    options.root = Some(nfsroot.to_string());
-    options.rootflags = Some(rootflags);
-    options.rootfstype = Some("nfs".to_string());
-    Ok(())
+
+    fn parse_nfsroot(&mut self) -> Result<()> {
+        if self.root.as_deref() != Some("/dev/nfs") && self.rootfstype.as_deref() != Some("nfs") {
+            return Ok(());
+        }
+
+        let nfsroot_option = self
+            .nfsroot
+            .as_ref()
+            .ok_or("Missing nfsroot command-line option!")?;
+        let mut rootflags = String::from("nolock");
+        let mut nfsroot = match nfsroot_option.split_once(',') {
+            None => nfsroot_option.to_string(),
+            Some((root, flags)) => {
+                rootflags.push(',');
+                rootflags.push_str(flags);
+                root.to_string()
+            }
+        };
+        rootflags.push_str(",addr=");
+        if !nfsroot.contains(':') {
+            let pnp = read_file("/proc/net/pnp")?;
+            for line in pnp.lines() {
+                match line.split_once(' ') {
+                    None => continue,
+                    Some((key, value)) => {
+                        if key == "bootserver" {
+                            nfsroot = value.to_owned() + ":" + &nfsroot;
+                            rootflags.push_str(value);
+                            break;
+                        }
+                    }
+                }
+            }
+        } else {
+            let (bootserver, _) = nfsroot
+                .split_once(':')
+                .ok_or("Failed to split out path from nfsroot parameter")?;
+            rootflags.push_str(bootserver);
+        }
+        self.root = Some(nfsroot.to_string());
+        self.rootflags = Some(rootflags);
+        self.rootfstype = Some("nfs".to_string());
+        Ok(())
+    }
 }
 
 pub type CmdlineCallback<'a> = dyn FnMut(&str, Option<&str>) -> Result<()> + 'a;
@@ -151,14 +155,13 @@ impl<'a> CmdlineOptionsParser<'a> {
                             key = &cmdline[start..i];
                         }
                         if !key.is_empty() {
-                            parse_option(
+                            options.parse_option(
                                 key,
                                 if have_value {
                                     Some(&cmdline[start..i])
                                 } else {
                                     None
                                 },
-                                &mut options,
                                 &mut self.callbacks,
                             )?;
                         }
@@ -174,11 +177,7 @@ impl<'a> CmdlineOptionsParser<'a> {
             }
         }
 
-        if options.root.as_deref() == Some("/dev/nfs")
-            || options.rootfstype.as_deref() == Some("nfs")
-        {
-            parse_nfsroot(&mut options)?;
-        }
+        options.parse_nfsroot()?;
 
         Ok(options)
     }
