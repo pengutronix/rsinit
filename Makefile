@@ -60,7 +60,7 @@ check-toolchain:
 	@echo "All required tools are available!"
 
 %-build: check-toolchain
-	CROSS_CONTAINER_ENGINE=$(CROSS_CONTAINER_ENGINE) RUSTFLAGS="$(RUSTFLAGS)" $(CARGO_RUNNER) +nightly build --target $* $(if $(TARGET_PROFILE),--profile $(TARGET_PROFILE)) $(CARGO_FLAGS)
+	CROSS_CONTAINER_ENGINE=$(CROSS_CONTAINER_ENGINE) RUSTFLAGS="$(RUSTFLAGS)" $(CARGO_RUNNER) +nightly build --all-targets --target $* $(if $(TARGET_PROFILE),--profile $(TARGET_PROFILE)) $(CARGO_FLAGS)
 
 %-cpio: T=target/$*/$(if $(TARGET_PROFILE),$(TARGET_PROFILE),debug)
 %-cpio: %-build
