@@ -1,11 +1,14 @@
 // SPDX-FileCopyrightText: 2024 The rsinit Authors
 // SPDX-License-Identifier: GPL-2.0-only
 
-use std::fs::remove_dir;
-use std::path::Path;
+use std::fs::{self, remove_dir};
+use std::path::{Path, PathBuf};
 
-use log::debug;
-use nix::mount::{mount, umount, MsFlags};
+use log::{debug, warn};
+use nix::{
+    mount::{mount, umount, MsFlags},
+    sys::utsname::uname,
+};
 
 use crate::util::{mkdir, wait_for_device, Result};
 
@@ -153,4 +156,50 @@ pub fn mount_tmpfs_overlay(overlayflags: MsFlags, mountpoint: &str) -> Result<()
     remove_dir(dir)?;
 
     Ok(())
+}
+
+/// Attempt to bind-mount `/lib/modules` from the initrd at `/root/lib/modules`.
+pub fn mount_bind_kernel_modules() -> Result<()> {
+    let src = "/lib/modules";
+
+    if !Path::new(&src).exists() {
+        warn!("Can't bind mount {src} as it doesn't exist. Continue without bind mounting.");
+        return Ok(());
+    }
+
+    let kernel_release = uname()?.release().display().to_string();
+    let kernel_modules_path = PathBuf::from(&format!("{src}/{kernel_release}"));
+    let mut modules_found = false;
+
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+
+        modules_found |= path == kernel_modules_path;
+
+        if path != kernel_modules_path {
+            warn!(
+                "{src} contains unexpected modules: {}. kernel release is: {kernel_release}",
+                path.display()
+            )
+        }
+    }
+
+    if !modules_found {
+        warn!(
+            "{} not found. Did you forget to supply matching kernel modules? kernel release is: {kernel_release}",
+            kernel_modules_path.display()
+        )
+    }
+
+    do_mount(
+        Some(src),
+        &format!("/root{src}"),
+        None,
+        MsFlags::MS_BIND,
+        None,
+    )
 }
