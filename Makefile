@@ -62,10 +62,27 @@ check-toolchain:
 %-build: check-toolchain
 	CROSS_CONTAINER_ENGINE=$(CROSS_CONTAINER_ENGINE) RUSTFLAGS="$(RUSTFLAGS)" $(CARGO_RUNNER) +nightly build --all-targets --target $* $(if $(TARGET_PROFILE),--profile $(TARGET_PROFILE)) $(CARGO_FLAGS)
 
+# Create a compressed cpio archive containing a binary renamed to 'init'.
+# Usage: $(call create-init-cpio,<source-binary>,<output-base-path>)
+# Produces: <output-base-path>.cpio.gz
+define create-init-cpio
+	tmp=$$(mktemp -d) && \
+	cp "$(1)" "$$tmp/init" && \
+	(cd "$$tmp" && find init | cpio --create --format=newc --quiet > "$(abspath .)/$(2).cpio") && \
+	gzip --best --force "$(abspath .)/$(2).cpio" && \
+	rm -rf "$$tmp"
+endef
+
 %-cpio: T=target/$*/$(if $(TARGET_PROFILE),$(TARGET_PROFILE),debug)
 %-cpio: %-build
-	cd $T && find init | cpio --create --format=newc > init-$*.cpio
-	cd $T && gzip --keep --best --force init-$*.cpio
+	@echo "Packaging: $T/init"
+	@$(call create-init-cpio,$T/init,$T/init-$*)
+	@for bin in $T/examples/*; do \
+		[ -f "$$bin" ] && [ -x "$$bin" ] && printf '%s\n' "$$bin" | grep -Eqv '\-[[:xdigit:]]{16}$$' || continue; \
+		name=$$(basename "$$bin"); \
+		echo "Packaging: $T/examples/$$name"; \
+		$(call create-init-cpio,$$bin,$T/examples/$$name); \
+	done
 
 clean:
 	cargo clean
