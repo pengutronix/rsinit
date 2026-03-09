@@ -134,6 +134,7 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
     let mut hash_algorithm = "";
     let mut salt = "";
     let mut root_hash = "";
+    let mut verity_params = None;
 
     let params = read_file("/verity-params")?;
     for line in params.lines() {
@@ -147,6 +148,7 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
                 "VERITY_HASH_ALGORITHM" => hash_algorithm = value,
                 "VERITY_SALT" => salt = value,
                 "VERITY_ROOT_HASH" => root_hash = value,
+                "VERITY_PARAMS" => verity_params = Some(value),
                 _ => (),
             },
         }
@@ -203,9 +205,16 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
     let target_type = "verity\0".as_bytes();
     table_load_data.target_spec.target_type[..target_type.len()].copy_from_slice(target_type);
 
-    let table_str = format!("1 {root_device} {root_device} {data_block_size} {hash_block_size} {data_blocks} {data_blocks} {hash_algorithm} {root_hash} {salt} 1 ignore_zero_blocks\0");
+    let (param_count, params) = if let Some(params) = verity_params {
+        (params.split_ascii_whitespace().count(), params)
+    } else {
+        (1, "ignore_zero_blocks")
+    };
+
+    let table_str = format!("1 {root_device} {root_device} {data_block_size} {hash_block_size} {data_blocks} {data_blocks} {hash_algorithm} {root_hash} {salt} {param_count} {params}\0");
     let table = table_str.as_bytes();
     table_load_data.params[..table.len()].copy_from_slice(table);
+    debug!("Configuring dm-verity with table = '{table_str}'");
 
     unsafe { dm_table_load(dm_fd, &mut table_load_data.header) }
         .map_err(|e| format!("Failed to load dm table: {e}"))?;
