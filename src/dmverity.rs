@@ -117,14 +117,15 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
     if !Path::new("/verity-params").exists() {
         return Ok(false);
     }
-    if options.root.is_none() {
-        return Ok(false);
-    }
-    let root_device = options.root.as_ref().ok_or("No root device")?;
     match options.rootfstype.as_deref() {
         Some("nfs") | Some("9p") => return Ok(false),
-        _ => wait_for_device(root_device)?,
+        _ => (),
     }
+    let root_device = options
+        .verity_root
+        .as_ref()
+        .ok_or("No verity root device")?;
+    wait_for_device(root_device)?;
 
     let mut data_blocks = "";
     let mut data_sectors = "";
