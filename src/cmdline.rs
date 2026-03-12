@@ -17,6 +17,7 @@ pub struct CmdlineOptions {
     pub rootfstype: Option<String>,
     pub rootflags: Option<String>,
     pub rootfsflags: MsFlags,
+    pub verity_root: Option<String>,
     pub nfsroot: Option<String>,
     pub init: String,
     pub cleanup: bool,
@@ -29,6 +30,7 @@ impl Default for CmdlineOptions {
             rootfstype: None,
             rootflags: None,
             rootfsflags: MsFlags::MS_RDONLY,
+            verity_root: None,
             nfsroot: None,
             init: "/sbin/init".into(),
             cleanup: true,
@@ -49,6 +51,7 @@ impl CmdlineOptions {
             "rootflags" => self.rootflags = value.map(str::to_string),
             "ro" => self.rootfsflags.insert(MsFlags::MS_RDONLY),
             "rw" => self.rootfsflags.remove(MsFlags::MS_RDONLY),
+            "rsinit.verity_root" => self.verity_root = Some(ensure_value(key, value)?.to_string()),
             "nfsroot" => self.nfsroot = Some(ensure_value(key, value)?.to_string()),
             "init" => self.init = ensure_value(key, value)?.into(),
             _ => {
@@ -300,5 +303,22 @@ mod tests {
         let _ = parser.parse_string(cmdline).expect("failed");
 
         assert_eq!(&*custom_option.borrow(), "xyz");
+    }
+
+    #[test]
+    fn test_verity() {
+        let cmdline = "rsinit.verity_root=/dev/mmcblk0p1 rootfstype=ext4\n";
+
+        let expected = CmdlineOptions {
+            verity_root: Some("/dev/mmcblk0p1".into()),
+            rootfstype: Some("ext4".into()),
+            ..Default::default()
+        };
+
+        let options = CmdlineOptionsParser::new()
+            .parse_string(cmdline)
+            .expect("failed");
+
+        assert_eq!(options, expected);
     }
 }
