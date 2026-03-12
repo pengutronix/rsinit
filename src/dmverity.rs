@@ -280,3 +280,60 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
 
     Ok(true)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_basic() {
+        let param_data = "
+VERITY_DATA_BLOCKS=26624
+VERITY_DATA_BLOCK_SIZE=4096
+VERITY_HASH_BLOCK_SIZE=4096
+VERITY_HASH_ALGORITHM=sha256
+VERITY_SALT=a224908192cf3202b8c3eda4a5f5c320a82f2f750681e1cb30bac367b08f3973
+VERITY_ROOT_HASH=c63dc40d73bdbb4093e3c54592182a6b74ea9e611145ba498033b696c6e072df
+VERITY_DATA_SECTORS=212992";
+
+        let root_device = "/dev/mmcblk3p2";
+        let uuid = "rsinit-verity-root-test-uuid".to_string();
+        let create_data = DmIoctl::new(&uuid).unwrap();
+
+        let expected_uuid = *b"rsinit-verity-root-test-uuid\0";
+        assert_eq!(create_data.uuid[..expected_uuid.len()], expected_uuid);
+
+        let params = VerityParams::from_string(param_data).expect("parsing params failed");
+        let table_load_data = DmTableLoad::new(&params, root_device, &uuid).unwrap();
+        let expected_table = *b"1 /dev/mmcblk3p2 /dev/mmcblk3p2 4096 4096 26624 26624 sha256 c63dc40d73bdbb4093e3c54592182a6b74ea9e611145ba498033b696c6e072df a224908192cf3202b8c3eda4a5f5c320a82f2f750681e1cb30bac367b08f3973 1 ignore_zero_blocks\0";
+        assert_eq!(
+            table_load_data.params[..expected_table.len()],
+            expected_table
+        );
+        assert_eq!(table_load_data.target_spec.length, 212992);
+    }
+
+    #[test]
+    fn test_params() {
+        let param_data = "
+VERITY_DATA_BLOCKS=26624
+VERITY_DATA_BLOCK_SIZE=4096
+VERITY_HASH_BLOCK_SIZE=4096
+VERITY_HASH_ALGORITHM=sha256
+VERITY_SALT=a224908192cf3202b8c3eda4a5f5c320a82f2f750681e1cb30bac367b08f3973
+VERITY_ROOT_HASH=c63dc40d73bdbb4093e3c54592182a6b74ea9e611145ba498033b696c6e072df
+VERITY_DATA_SECTORS=212992
+VERITY_PARAMS=ignore_zero_blocks  panic_on_corruption ";
+
+        let root_device = "/dev/mmcblk3p2";
+        let uuid = "rsinit-verity-root-test-uuid".to_string();
+
+        let params = VerityParams::from_string(param_data).expect("parsing params failed");
+        let table_load_data = DmTableLoad::new(&params, root_device, &uuid).unwrap();
+        let expected_table = *b"1 /dev/mmcblk3p2 /dev/mmcblk3p2 4096 4096 26624 26624 sha256 c63dc40d73bdbb4093e3c54592182a6b74ea9e611145ba498033b696c6e072df a224908192cf3202b8c3eda4a5f5c320a82f2f750681e1cb30bac367b08f3973 2 ignore_zero_blocks  panic_on_corruption \0";
+        assert_eq!(
+            table_load_data.params[..expected_table.len()],
+            expected_table
+        );
+    }
+}
