@@ -21,6 +21,61 @@ const DM_MAX_TYPE_NAME: usize = 16;
 const DM_NAME_LEN: usize = 128;
 const DM_UUID_LEN: usize = 129;
 
+struct VerityParams<'a> {
+    data_blocks: &'a str,
+    data_sectors: u64,
+    data_block_size: &'a str,
+    hash_block_size: &'a str,
+    hash_algorithm: &'a str,
+    salt: &'a str,
+    root_hash: &'a str,
+    verity_params: (usize, &'a str),
+}
+
+impl<'a> VerityParams<'a> {
+    fn from_string(params: &'a str) -> Result<VerityParams<'a>> {
+        let mut data_blocks = "";
+        let mut data_sectors = 0;
+        let mut data_block_size = "";
+        let mut hash_block_size = "";
+        let mut hash_algorithm = "";
+        let mut salt = "";
+        let mut root_hash = "";
+        let mut verity_params = (1, "ignore_zero_blocks");
+
+        for line in params.lines() {
+            match line.split_once('=') {
+                None => continue,
+                Some((key, value)) => match key {
+                    "VERITY_DATA_BLOCKS" => data_blocks = value,
+                    "VERITY_DATA_SECTORS" => {
+                        data_sectors = value.parse::<u64>().map_err(|e| {
+                            format!("Failed to parse 'VERITY_DATA_SECTORS={data_sectors}: {e}")
+                        })?
+                    }
+                    "VERITY_DATA_BLOCK_SIZE" => data_block_size = value,
+                    "VERITY_HASH_BLOCK_SIZE" => hash_block_size = value,
+                    "VERITY_HASH_ALGORITHM" => hash_algorithm = value,
+                    "VERITY_SALT" => salt = value,
+                    "VERITY_ROOT_HASH" => root_hash = value,
+                "VERITY_PARAMS" => verity_params = (value.split_ascii_whitespace().count(), value),
+                    _ => (),
+                },
+            }
+        }
+        Ok(VerityParams {
+            data_blocks,
+            data_sectors,
+            data_block_size,
+            hash_block_size,
+            hash_algorithm,
+            salt,
+            root_hash,
+            verity_params,
+        })
+    }
+}
+
 #[repr(C)]
 struct DmIoctl {
     version: [u32; 3],
@@ -53,6 +108,40 @@ impl Default for DmIoctl {
             uuid: [0; DM_UUID_LEN],
             data: [0; 7],
         }
+    }
+}
+
+impl DmIoctl {
+    fn uuid(device: &str) -> Result<String> {
+        let rand = {
+            let mut rand = [0u8; 16];
+            getrandom(&mut rand).map_err(|_| "Getrandom failed")?;
+            rand
+        };
+        let mut uuid_str = String::from("rsinit-verity-root-");
+        for x in rand {
+            uuid_str.push_str(format!("{x:02x}").as_str());
+        }
+        uuid_str.push('-');
+        uuid_str.push_str(device.rsplit_once('/').unwrap_or(("", device)).1);
+        Ok(uuid_str)
+    }
+
+    fn init_header(&mut self, size: u32, flags: u32, uuid: &str) -> Result<()> {
+        let len = usize::min(uuid.len(), DM_UUID_LEN - 1);
+        let uuid = &uuid.as_bytes()[..len];
+        self.version[0] = DM_VERSION_MAJOR;
+        self.data_size = size;
+        self.data_start = u32::try_from(size_of::<DmIoctl>())?;
+        self.flags = flags;
+        self.uuid[..uuid.len()].copy_from_slice(uuid);
+        Ok(())
+    }
+
+    fn new(uuid: &str) -> Result<DmIoctl> {
+        let mut create_data = DmIoctl::default();
+        create_data.init_header(u32::try_from(size_of::<DmIoctl>())?, 0, uuid)?;
+        Ok(create_data)
     }
 }
 
@@ -94,6 +183,43 @@ impl Default for DmTableLoad {
     }
 }
 
+impl DmTableLoad {
+    fn new(params: &VerityParams, root_device: &str, uuid: &str) -> Result<DmTableLoad> {
+        let mut table_load_data = DmTableLoad::default();
+        table_load_data.header.init_header(
+            u32::try_from(size_of::<DmTableLoad>())?,
+            DM_READONLY_FLAG,
+            uuid,
+        )?;
+        table_load_data.header.target_count = 1;
+        table_load_data.target_spec.status = 0;
+        table_load_data.target_spec.sector_start = 0;
+        table_load_data.target_spec.length = params.data_sectors;
+
+        let target_type = "verity\0".as_bytes();
+        table_load_data.target_spec.target_type[..target_type.len()].copy_from_slice(target_type);
+
+        let table_str = format!(
+            "1 {} {} {} {} {} {} {} {} {} {} {}\0",
+            root_device,
+            root_device,
+            params.data_block_size,
+            params.hash_block_size,
+            params.data_blocks,
+            params.data_blocks,
+            params.hash_algorithm,
+            params.root_hash,
+            params.salt,
+            params.verity_params.0,
+            params.verity_params.1
+        );
+        let table = table_str.as_bytes();
+        table_load_data.params[..table.len()].copy_from_slice(table);
+        debug!("Configuring dm-verity with table = '{table_str}'");
+        Ok(table_load_data)
+    }
+}
+
 const DM_READONLY_FLAG: u32 = 1;
 
 const DM_DEV_CREATE_CMD: u8 = 3;
@@ -103,15 +229,6 @@ const DM_TABLE_LOAD_CMD: u8 = 9;
 ioctl_readwrite!(dm_dev_create, 0xfd, DM_DEV_CREATE_CMD, DmIoctl);
 ioctl_readwrite!(dm_table_load, 0xfd, DM_TABLE_LOAD_CMD, DmIoctl);
 ioctl_readwrite!(dm_dev_suspend, 0xfd, DM_DEV_SUSPEND_CMD, DmIoctl);
-
-fn init_header(header: &mut DmIoctl, size: u32, flags: u32, uuid: &[u8]) -> Result<()> {
-    header.version[0] = DM_VERSION_MAJOR;
-    header.data_size = size;
-    header.data_start = u32::try_from(size_of::<DmIoctl>())?;
-    header.flags = flags;
-    header.uuid[..uuid.len()].copy_from_slice(uuid);
-    Ok(())
-}
 
 pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
     if !Path::new("/verity-params").exists() {
@@ -127,34 +244,13 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
         .ok_or("No verity root device")?;
     wait_for_device(root_device)?;
 
-    let mut data_blocks = "";
-    let mut data_sectors = "";
-    let mut data_block_size = "";
-    let mut hash_block_size = "";
-    let mut hash_algorithm = "";
-    let mut salt = "";
-    let mut root_hash = "";
-    let mut verity_params = None;
+    let param_data = read_file("/verity-params")?;
+    let params = VerityParams::from_string(&param_data)?;
 
-    let params = read_file("/verity-params")?;
-    for line in params.lines() {
-        match line.split_once('=') {
-            None => continue,
-            Some((key, value)) => match key {
-                "VERITY_DATA_BLOCKS" => data_blocks = value,
-                "VERITY_DATA_SECTORS" => data_sectors = value,
-                "VERITY_DATA_BLOCK_SIZE" => data_block_size = value,
-                "VERITY_HASH_BLOCK_SIZE" => hash_block_size = value,
-                "VERITY_HASH_ALGORITHM" => hash_algorithm = value,
-                "VERITY_SALT" => salt = value,
-                "VERITY_ROOT_HASH" => root_hash = value,
-                "VERITY_PARAMS" => verity_params = Some(value),
-                _ => (),
-            },
-        }
-    }
-
-    debug!("Configuring dm-verity rootfs with root-hash = {root_hash}");
+    debug!(
+        "Configuring dm-verity rootfs with root-hash = {}",
+        params.root_hash
+    );
 
     let f = OpenOptions::new()
         .write(true)
@@ -162,70 +258,20 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
         .map_err(|e| format!("Failed to open /dev/mapper/control: {e}"))?;
     let dm_fd = f.into_raw_fd();
 
-    let mut rand = [0u8; 16];
-    if getrandom(&mut rand).is_err() {
-        return Err("Getrandom failed".into());
-    };
-    let mut uuid_str = String::from("rsinit-verity-root-");
-    for x in rand {
-        uuid_str.push_str(format!("{x:02x}").as_str());
-    }
-    uuid_str.push('-');
-    uuid_str.push_str(root_device.rsplit_once('/').unwrap_or(("", root_device)).1);
-    let len = usize::min(uuid_str.len(), DM_UUID_LEN - 1);
-    let uuid = &uuid_str.as_bytes()[..len];
-
-    let mut create_data = DmIoctl::default();
-    init_header(
-        &mut create_data,
-        u32::try_from(size_of::<DmIoctl>())?,
-        0,
-        uuid,
-    )?;
-
+    let uuid = DmIoctl::uuid(root_device)?;
+    let mut create_data = DmIoctl::new(&uuid)?;
     let name = "verity-rootfs\0".as_bytes();
     create_data.name[..name.len()].copy_from_slice(name);
 
     unsafe { dm_dev_create(dm_fd, &mut create_data) }
         .map_err(|e| format!("Failed to create dm device: {e}"))?;
 
-    let mut table_load_data = DmTableLoad::default();
-    init_header(
-        &mut table_load_data.header,
-        u32::try_from(size_of::<DmTableLoad>())?,
-        DM_READONLY_FLAG,
-        uuid,
-    )?;
-    table_load_data.header.target_count = 1;
-    table_load_data.target_spec.status = 0;
-    table_load_data.target_spec.sector_start = 0;
-    table_load_data.target_spec.length = data_sectors
-        .parse::<u64>()
-        .map_err(|e| format!("Failed to parse 'VERITY_DATA_SECTORS={data_sectors}: {e}"))?;
-    let target_type = "verity\0".as_bytes();
-    table_load_data.target_spec.target_type[..target_type.len()].copy_from_slice(target_type);
-
-    let (param_count, params) = if let Some(params) = verity_params {
-        (params.split_ascii_whitespace().count(), params)
-    } else {
-        (1, "ignore_zero_blocks")
-    };
-
-    let table_str = format!("1 {root_device} {root_device} {data_block_size} {hash_block_size} {data_blocks} {data_blocks} {hash_algorithm} {root_hash} {salt} {param_count} {params}\0");
-    let table = table_str.as_bytes();
-    table_load_data.params[..table.len()].copy_from_slice(table);
-    debug!("Configuring dm-verity with table = '{table_str}'");
+    let mut table_load_data = DmTableLoad::new(&params, root_device, &uuid)?;
 
     unsafe { dm_table_load(dm_fd, &mut table_load_data.header) }
         .map_err(|e| format!("Failed to load dm table: {e}"))?;
 
-    let mut suspend_data = DmIoctl::default();
-    init_header(
-        &mut suspend_data,
-        u32::try_from(size_of::<DmIoctl>())?,
-        0,
-        uuid,
-    )?;
+    let mut suspend_data = DmIoctl::new(&uuid)?;
 
     unsafe { dm_dev_suspend(dm_fd, &mut suspend_data) }
         .map_err(|e| format!("Failed to suspend dm device: {e}"))?;
