@@ -106,6 +106,7 @@ pub fn mount_overlay(
     data: Option<&str>,
     upper: &str,
     mountpoint: &str,
+    name: Option<&str>,
 ) -> Result<()> {
     let upperdir = format!("{upper}/upperdir");
     let workdir = format!("{upper}/workdir");
@@ -120,7 +121,7 @@ pub fn mount_overlay(
     mkdir(&workdir)?;
 
     do_mount(
-        Option::<&str>::None,
+        name,
         &mountdir,
         Some("overlay"),
         flags,
@@ -131,7 +132,11 @@ pub fn mount_overlay(
     Ok(())
 }
 
-pub fn mount_tmpfs_overlay(overlayflags: MsFlags, mountpoint: &str) -> Result<()> {
+pub fn mount_tmpfs_overlay(
+    overlayflags: MsFlags,
+    mountpoint: &str,
+    name: Option<&str>,
+) -> Result<()> {
     let dir = "/.overlay";
 
     mkdir(dir)?;
@@ -148,6 +153,7 @@ pub fn mount_tmpfs_overlay(overlayflags: MsFlags, mountpoint: &str) -> Result<()
         Some("redirect_dir=on,index=on,metacopy=on,volatile"),
         dir,
         mountpoint,
+        name,
     )?;
     umount(dir).map_err(|e| format!("Failed to unmount {dir}: {e}"))?;
     remove_dir(dir)?;
