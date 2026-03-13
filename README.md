@@ -52,6 +52,50 @@ rsinit can be used as a crate in a custom rust application. The code is
 structured in a way that makes it possible to reuse the existing code and add
 new functionality as needed.
 
+Kernel Command-Line Parameters
+------------------------------
+
+In general, rsinit uses the same parameters that the kernel uses.
+Currently, the following parameters are interpreted by rsinit:
+
+- `root=`
+- `rootfstype=`
+- `rootflags=`
+- `ro`/`rw`
+- `nfsroot=`
+- `init=`
+
+9pfs with USB gadget transport
+------------------------------
+
+With `rootfstype=9p` and `trans=usbg` in `rootflags=`, rsinit does all the
+necessary things to boot from a 9pfs over USB. In this case, `root=` must
+be used to specify the USB gadget device.
+
+dm-verity rootfs
+----------------
+
+If the file `/verity-params` exists in the initramfs then rsinit assumes
+that a dm-verity protected rootfs should be mounted.
+In this case, `rsinit.verity_root=` must be used to specific the root
+device. This is used instead of `root=` because it makes it harder to
+accidentally mount the rootfs without dm-verity, e.g. if the initramfs is
+missing due to some kind of misconfiguration.
+
+rsinit assumes that the specified root device contains the rootfs and the
+dm-verity hash tree. The following parameters are read from
+`/verity-params` as `<key>=<value>` lines:
+
+- `VERITY_DATA_BLOCKS`: The number of data blocks on the data device.
+- `VERITY_DATA_SECTORS`: The number of data sectors on the data device.
+- `VERITY_DATA_BLOCK_SIZE`: The block size on a data device in bytes.
+- `VERITY_HASH_BLOCK_SIZE`: The size of a hash block in bytes.
+- `VERITY_HASH_ALGORITHM`: The cryptographic hash algorithm used for this device.
+- `VERITY_SALT`: The hexadecimal encoding of the salt value.
+- `VERITY_ROOT_HASH`: The hexadecimal encoding of the root hash.
+- `VERITY_PARAMS`: Optional space separated list of aditional parameters.
+  Defaults to `ignore_zero_blocks` if not set.
+
 Cross compilation with cross.rs
 -------------------------------
 
