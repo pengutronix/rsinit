@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 use std::fs::{read_dir, write};
-use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::symlink;
 use std::{thread, time};
 
@@ -17,17 +16,33 @@ fn write_file<C: AsRef<[u8]>>(path: &str, content: C) -> Result<()> {
     write(path, content).map_err(|e| format!("Failed to write to {path}: {e}").into())
 }
 
-fn setup_9pfs_gadget(device: &String) -> Result<()> {
+fn setup_9pfs_gadget(options: &mut CmdlineOptions) -> Result<()> {
     debug!("Initializing USB 9pfs gadget ...");
 
-    let udc = read_dir("/sys/class/udc")
-        .map_err(|e| format!("Failed to list /sys/class/udc: {e}"))?
-        .next()
-        .ok_or("No UDC found to attach the 9pfs gadget".to_string())?
-        .map_err(|e| format!("Failed to inspect the first entry in /sys/class/udc: {e}"))?
-        .file_name();
+    let device = if let Some(root) = &mut options.root {
+        if let Some(index) = root.find('/') {
+            root.truncate(index)
+        }
+        root
+    } else {
+        let udc = read_dir("/sys/class/udc")
+            .map_err(|e| format!("Failed to list /sys/class/udc: {e}"))?
+            .next()
+            .ok_or("No UDC found to attach the 9pfs gadget".to_string())?
+            .map_err(|e| format!("Failed to inspect the first entry in /sys/class/udc: {e}"))?
+            .file_name()
+            .into_string()
+            .map_err(|e| format!("UDC contains invalid UTF-8 {e:?}"))?;
+        options.root = Some(udc);
+        options.root.as_deref().unwrap()
+    };
 
-    mount_apivfs("/sys/kernel/config", "configfs", MsFlags::empty(), None)?;
+    mount_apivfs(
+        "/sys/kernel/config",
+        "configfs",
+        MsFlags::MS_NOSUID | MsFlags::MS_NOEXEC | MsFlags::MS_NODEV,
+        None,
+    )?;
 
     mkdir("/sys/kernel/config/usb_gadget/9pfs")?;
 
@@ -56,33 +71,23 @@ fn setup_9pfs_gadget(device: &String) -> Result<()> {
     mkdir(&function)?;
     symlink(&function, &link)?;
 
-    debug!(
-        "Attaching 9pfs gatget to UDC {}",
-        udc.as_bytes().escape_ascii()
-    );
-    write_file(
-        "/sys/kernel/config/usb_gadget/9pfs/UDC",
-        udc.as_encoded_bytes(),
-    )?;
+    debug!("Attaching 9pfs gatget to UDC {device}");
+    write_file("/sys/kernel/config/usb_gadget/9pfs/UDC", device)?;
 
     let d = time::Duration::new(1, 0);
     thread::sleep(d);
     Ok(())
 }
 
-pub fn prepare_9pfs_gadget(options: &CmdlineOptions) -> Result<bool> {
+pub fn prepare_9pfs_gadget(options: &mut CmdlineOptions) -> Result<bool> {
     if options.rootfstype.as_deref() == Some("9p")
         && options
             .rootflags
             .as_deref()
             .is_some_and(|flags| flags.contains("trans=usbg"))
     {
-        if let Some(root) = &options.root {
-            setup_9pfs_gadget(root)?;
-            Ok(true)
-        } else {
-            Err("Missing root= for 9p!".into())
-        }
+        setup_9pfs_gadget(options)?;
+        Ok(true)
     } else {
         Ok(false)
     }
