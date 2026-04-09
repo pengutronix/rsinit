@@ -35,15 +35,8 @@ pub fn do_mount(
     Ok(())
 }
 
-pub fn mount_apivfs(dst: &str, fstype: &str) -> Result<()> {
-    do_mount(
-        Some(fstype),
-        dst,
-        Some(fstype),
-        MsFlags::empty(),
-        Option::<&str>::None,
-    )?;
-
+pub fn mount_apivfs(dst: &str, fstype: &str, flags: MsFlags, data: Option<&str>) -> Result<()> {
+    do_mount(Some(fstype), dst, Some(fstype), flags, data)?;
     Ok(())
 }
 
@@ -91,9 +84,24 @@ fn mount_move(src: &str, dst: &str, cleanup: bool) -> Result<()> {
 }
 
 pub fn mount_special() -> Result<()> {
-    mount_apivfs("/dev", "devtmpfs")?;
-    mount_apivfs("/sys", "sysfs")?;
-    mount_apivfs("/proc", "proc")?;
+    mount_apivfs(
+        "/dev",
+        "devtmpfs",
+        MsFlags::MS_NOSUID | MsFlags::MS_STRICTATIME,
+        Some("mode=0755,size=4m"),
+    )?;
+    mount_apivfs(
+        "/sys",
+        "sysfs",
+        MsFlags::MS_NOSUID | MsFlags::MS_NOEXEC | MsFlags::MS_NODEV,
+        None,
+    )?;
+    mount_apivfs(
+        "/proc",
+        "proc",
+        MsFlags::MS_NOSUID | MsFlags::MS_NOEXEC | MsFlags::MS_NODEV,
+        None,
+    )?;
     Ok(())
 }
 

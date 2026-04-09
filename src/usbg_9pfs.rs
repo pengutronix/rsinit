@@ -7,6 +7,7 @@ use std::os::unix::fs::symlink;
 use std::{thread, time};
 
 use log::debug;
+use nix::mount::MsFlags;
 
 use crate::cmdline::CmdlineOptions;
 use crate::mount::mount_apivfs;
@@ -26,7 +27,7 @@ fn setup_9pfs_gadget(device: &String) -> Result<()> {
         .map_err(|e| format!("Failed to inspect the first entry in /sys/class/udc: {e}"))?
         .file_name();
 
-    mount_apivfs("/sys/kernel/config", "configfs")?;
+    mount_apivfs("/sys/kernel/config", "configfs", MsFlags::empty(), None)?;
 
     mkdir("/sys/kernel/config/usb_gadget/9pfs")?;
 
