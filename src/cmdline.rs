@@ -21,6 +21,10 @@ pub struct CmdlineOptions {
     pub nfsroot: Option<String>,
     pub init: String,
     pub cleanup: bool,
+    /// Attempt to bind-mount `/lib/modules` from the initrd at `/root/lib/modules`.
+    ///
+    /// Enabled by the `rsinit.bind_modules` cmdline flag.
+    pub bind_modules: bool,
 }
 
 impl Default for CmdlineOptions {
@@ -34,6 +38,7 @@ impl Default for CmdlineOptions {
             nfsroot: None,
             init: "/sbin/init".into(),
             cleanup: true,
+            bind_modules: false,
         }
     }
 }
@@ -54,6 +59,7 @@ impl CmdlineOptions {
             "rsinit.verity_root" => self.verity_root = Some(ensure_value(key, value)?.to_string()),
             "nfsroot" => self.nfsroot = Some(ensure_value(key, value)?.to_string()),
             "init" => self.init = ensure_value(key, value)?.into(),
+            "rsinit.bind_modules" => self.bind_modules = true,
             _ => {
                 for cb in callbacks {
                     cb(key, value)?
@@ -312,6 +318,23 @@ mod tests {
         let expected = CmdlineOptions {
             verity_root: Some("/dev/mmcblk0p1".into()),
             rootfstype: Some("ext4".into()),
+            ..Default::default()
+        };
+
+        let options = CmdlineOptionsParser::new()
+            .parse_string(cmdline)
+            .expect("failed");
+
+        assert_eq!(options, expected);
+    }
+
+    #[test]
+    fn test_rsinit_bind() {
+        let cmdline = "root=/dev/root rsinit.bind_modules\n";
+
+        let expected = CmdlineOptions {
+            root: Some("/dev/root".into()),
+            bind_modules: true,
             ..Default::default()
         };
 

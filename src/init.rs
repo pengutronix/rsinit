@@ -23,7 +23,8 @@ use crate::cmdline::{CmdlineCallback, CmdlineOptions, CmdlineOptionsParser};
 #[cfg(feature = "dmverity")]
 use crate::dmverity::prepare_dmverity;
 use crate::mount::{
-    mount_move_special, mount_overlay, mount_root, mount_special, mount_tmpfs_overlay,
+    mount_bind_kernel_modules, mount_move_special, mount_overlay, mount_root, mount_special,
+    mount_tmpfs_overlay,
 };
 #[cfg(feature = "systemd")]
 use crate::systemd::mount_systemd;
@@ -232,6 +233,10 @@ impl<'a> InitContext<'a> {
         self.prepare_aux()?;
 
         self.mount_root()?;
+
+        if self.options.bind_modules {
+            mount_bind_kernel_modules()?;
+        }
 
         self.finish()?;
 
