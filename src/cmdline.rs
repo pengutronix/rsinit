@@ -158,26 +158,24 @@ impl<'a> CmdlineOptionsParser<'a> {
                     quoted = !quoted;
                     skip = true;
                 }
-                ' ' | '\n' => {
-                    if !quoted {
-                        if !have_value {
-                            key = &cmdline[start..i];
-                        }
-                        if !key.is_empty() {
-                            options.parse_option(
-                                key,
-                                if have_value {
-                                    Some(&cmdline[start..i])
-                                } else {
-                                    None
-                                },
-                                &mut self.callbacks,
-                            )?;
-                        }
-                        key = &cmdline[0..0];
-                        have_value = false;
-                        skip = true;
+                ' ' | '\n' if !quoted => {
+                    if !have_value {
+                        key = &cmdline[start..i];
                     }
+                    if !key.is_empty() {
+                        options.parse_option(
+                            key,
+                            if have_value {
+                                Some(&cmdline[start..i])
+                            } else {
+                                None
+                            },
+                            &mut self.callbacks,
+                        )?;
+                    }
+                    key = &cmdline[0..0];
+                    have_value = false;
+                    skip = true;
                 }
                 _ => {}
             }
