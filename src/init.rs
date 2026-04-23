@@ -188,7 +188,7 @@ impl<'a> InitContext<'a> {
     }
 
     pub fn mount_tmpfs_root_overlay(self: &InitContext<'a>) -> Result<()> {
-        mount_tmpfs_overlay(self.options.rootfsflags, "/")
+        mount_tmpfs_overlay(self.options.rootfsflags, "/", self.options.root.as_deref())
     }
 
     pub fn mount_root_overlay(
@@ -196,7 +196,13 @@ impl<'a> InitContext<'a> {
         data: Option<&str>,
         upper: &str,
     ) -> Result<()> {
-        mount_overlay(self.options.rootfsflags, data, upper, "/")
+        mount_overlay(
+            self.options.rootfsflags,
+            data,
+            upper,
+            "/",
+            self.options.root.as_deref(),
+        )
     }
 
     pub fn start_init(self: &InitContext<'a>) -> Result<()> {
