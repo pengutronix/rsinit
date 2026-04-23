@@ -12,6 +12,8 @@ use std::io::Write as _;
 use std::os::fd::AsFd;
 use std::os::unix::ffi::OsStrExt;
 use std::panic::set_hook;
+#[cfg(feature = "reboot-on-failure")]
+use std::process;
 
 use log::{debug, Level, LevelFilter, Metadata, Record};
 #[cfg(feature = "reboot-on-failure")]
@@ -26,6 +28,8 @@ use crate::mount::{
     mount_bind_kernel_modules, mount_move_special, mount_overlay, mount_root, mount_special,
     mount_tmpfs_overlay,
 };
+#[cfg(feature = "readahead")]
+use crate::readahead;
 #[cfg(feature = "systemd")]
 use crate::systemd::mount_systemd;
 #[cfg(feature = "usb9pfs")]
@@ -86,12 +90,16 @@ fn finalize() {
     /* Make sure all output is written before exiting */
     let _ = tcdrain(io::stdout().as_fd());
     #[cfg(feature = "reboot-on-failure")]
-    let _ = reboot(RebootMode::RB_AUTOBOOT);
+    if process::id() == 1 {
+        let _ = reboot(RebootMode::RB_AUTOBOOT);
+    }
 }
 
 pub struct InitContext<'a> {
     pub options: CmdlineOptions,
     parser: CmdlineOptionsParser<'a>,
+    #[cfg(feature = "readahead")]
+    pub readahead_data: Option<readahead::ReadaheadData>,
 }
 
 impl<'a> InitContext<'a> {
@@ -106,6 +114,8 @@ impl<'a> InitContext<'a> {
         Ok(Self {
             options: CmdlineOptions::default(),
             parser: CmdlineOptionsParser::new(),
+            #[cfg(feature = "readahead")]
+            readahead_data: readahead::readahead_open("/trace.json")?,
         })
     }
 
@@ -221,6 +231,10 @@ impl<'a> InitContext<'a> {
 
     pub fn finish(self: &mut InitContext<'a>) -> Result<()> {
         self.switch_root()?;
+
+        #[cfg(feature = "readahead")]
+        readahead::readahead_start(self.readahead_data.take(), "/run/trace.json")?;
+
         self.start_init()?;
 
         Ok(())
