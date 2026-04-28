@@ -32,8 +32,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup toolchain install ${{ matrix.version }}
-      - run: rustup run ${{ matrix.version }} cargo build --verbose
-      - run: rustup run ${{ matrix.version }} cargo test --verbose
+      - run: rustup run ${{ matrix.version }} cargo build --all-targets --verbose
+      - run: rustup run ${{ matrix.version }} cargo test --all-targets --verbose
 
   clippy:
     strategy:
