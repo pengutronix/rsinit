@@ -154,7 +154,7 @@ impl<'a> InitContext<'a> {
             return Ok(());
         }
         #[cfg(feature = "usb9pfs")]
-        if prepare_9pfs_gadget(&self.options)? {
+        if prepare_9pfs_gadget(&mut self.options)? {
             return Ok(());
         }
         Ok(())
