@@ -52,6 +52,85 @@ rsinit can be used as a crate in a custom rust application. The code is
 structured in a way that makes it possible to reuse the existing code and add
 new functionality as needed.
 
+Kernel Command-Line Parameters
+------------------------------
+
+In general, rsinit uses the same parameters that the kernel would use when
+booting without an initramfs.
+Currently, the following parameters are interpreted by rsinit:
+
+- `root=`
+- `rootfstype=`
+- `rootflags=`
+- `ro`/`rw`
+- `nfsroot=`
+- `init=`
+- `rsinit.bind_modules`
+
+9pfs with USB gadget transport
+------------------------------
+
+With `rootfstype=9p` and `trans=usbg` in `rootflags=`, rsinit does all the
+necessary things to boot from a 9pfs over USB.
+In this case, `root=` can be used to specify the USB gadget device.
+Otherwise the first gadget device is used.
+
+To boot from USB, the kernel command-line arguments should look like this:
+`rootfstype=9p rootflags=trans=usbg,cache=loose,uname=root,access=any,dfltuid=0,dfltgid=0,aname=/path/to/the/rootfs`
+
+The specified path will depend on where the rootfs is located on the exporting
+server and how the 9pfs server exports it.
+With `diod` as 9pfs server and `tools/usb/p9_fwd.py` from the Linux kernel
+source to bridge the 9p traffic from TCP to USB, the path is the absolute path
+on the server.
+
+In most cases, specifying the gadget device is not necessary, because there is
+only on device.
+If necessary something like `root=ci_hdrc.0` can be used.
+
+See the [`Linux kernel documentation`](https://docs.kernel.org/filesystems/9p.html)
+for more details on the mount options and 9pfs server setup.
+
+dm-verity rootfs
+----------------
+
+If the file `/verity-params` exists in the initramfs then rsinit assumes
+that a dm-verity protected rootfs should be mounted.
+In this case, `rsinit.verity_root=` must be used to specific the root
+device.
+This is used instead of `root=` because it makes it harder to accidentally
+mount the rootfs without dm-verity, e.g. if the initramfs is missing due to
+some kind of misconfiguration.
+
+rsinit assumes that the specified root device contains the rootfs and the
+dm-verity hash tree.
+The following parameters are read from `/verity-params` as `<key>=<value>`
+lines:
+
+- `VERITY_DATA_BLOCKS`: The number of data blocks on the data device.
+- `VERITY_DATA_SECTORS`: The number of data sectors on the data device.
+- `VERITY_DATA_BLOCK_SIZE`: The block size on a data device in bytes.
+- `VERITY_HASH_BLOCK_SIZE`: The size of a hash block in bytes.
+- `VERITY_HASH_ALGORITHM`: The cryptographic hash algorithm used for this device.
+- `VERITY_SALT`: The hexadecimal encoding of the salt value.
+- `VERITY_ROOT_HASH`: The hexadecimal encoding of the root hash.
+- `VERITY_PARAMS`: Optional space separated list of additional parameters.
+  Defaults to `ignore_zero_blocks` if not set.
+
+bind mounting kernel modules from initrd
+----------------------------------------
+
+With `rsinit.bind_modules` rsinit will will attempt to bind-mount
+`/lib/modules` from the initrd at `/root/lib/modules`, providing them to the
+rootfs.
+
+rsinit will warn if the folder `/lib/modules` does not exist.
+
+rsinit will refuse to bind-mount `/lib/modules` with an error if:
+
+1. `/lib/modules/<uname --kernel-release>` does not exist
+2. `/lib/modules/` contains files or folders which do not match the current kernel release
+
 Cross compilation with cross.rs
 -------------------------------
 
