@@ -27,7 +27,7 @@ use crate::mount::{
     mount_tmpfs_overlay,
 };
 #[cfg(feature = "systemd")]
-use crate::systemd::mount_systemd;
+use crate::systemd::{mount_systemd, shutdown};
 #[cfg(feature = "usb9pfs")]
 use crate::usbg_9pfs::prepare_9pfs_gadget;
 use crate::util::Result;
@@ -232,7 +232,21 @@ impl<'a> InitContext<'a> {
         Ok(())
     }
 
-    pub fn run(self: &mut InitContext<'a>) -> Result<()> {
+    pub fn run(self: &mut InitContext<'a>, cmd: &str) {
+        // log isn't setup at this point
+        println!("Running {cmd}...");
+        let result = match cmd {
+            #[cfg(feature = "systemd")]
+            "/shutdown" => shutdown(),
+            _ => self.run_impl(),
+        };
+
+        if let Err(e) = result {
+            println!("{e}");
+        }
+    }
+
+    fn run_impl(self: &mut InitContext<'a>) -> Result<()> {
         self.setup()?;
 
         #[cfg(any(feature = "dmverity", feature = "usb9pfs"))]
@@ -244,9 +258,7 @@ impl<'a> InitContext<'a> {
             mount_bind_kernel_modules()?;
         }
 
-        self.finish()?;
-
-        Ok(())
+        self.finish()
     }
 }
 
