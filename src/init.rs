@@ -299,6 +299,24 @@ impl<'a> InitContext<'a> {
         Ok(())
     }
 
+    /// Run rsinit using the first argument from the commandline. If run under
+    /// systemd the argument is `shutdown`.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use rsinit::init::InitContext;
+    ///
+    /// let mut ctx = InitContext::new()?;
+    /// ctx.run_from_env()?;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn run_from_env(&mut self) -> Result<()> {
+        let cmd = env::args().next().ok_or("No cmd to run was found")?;
+        self.run(&cmd);
+        Ok(())
+    }
+
     pub fn run(self: &mut InitContext<'a>, cmd: &str) {
         // log isn't setup at this point
         println!("Running {cmd}...");
