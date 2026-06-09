@@ -159,22 +159,25 @@ impl<'a> InitContext<'a> {
     /// use rsinit::cmdline::ensure_value;
     /// use rsinit::init::InitContext;
     ///
-    /// let mut custom_option = RefCell::new(String::new());
+    /// let custom_option = RefCell::new(String::new());
     /// let mut ctx = InitContext::new()?;
     ///
-    /// ctx.add_cmdline_parser_callback(Box::new(|key, val| {
+    /// ctx.add_cmdline_parser_callback(|key, val| {
     ///     if key == "my.option" {
     ///         *custom_option.borrow_mut() = ensure_value(key, val)?.to_owned();
     ///     }
     ///     Ok(())
-    /// }));
+    /// });
     ///
     /// // When `setup()` parses /proc/cmdline, the callback will be invoked
     /// ctx.setup()?;
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
-    pub fn add_cmdline_parser_callback(&mut self, cb: Box<CmdlineCallback<'a>>) {
-        self.parser.add_callback(cb);
+    pub fn add_cmdline_parser_callback<F>(&mut self, cb: F)
+    where
+        F: FnMut(&str, Option<&str>) -> Result<()> + 'a,
+    {
+        self.parser.add_callback(Box::new(cb));
     }
 
     /// Register a callback to be executed during a specific lifecycle phase.

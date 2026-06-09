@@ -43,9 +43,7 @@ fn main() -> Result<()> {
     let mount_args = RefCell::new(MountArgs::default());
 
     let mut ctx = InitContext::new()?;
-    ctx.add_cmdline_parser_callback(Box::new(|key, value| {
-        mount_args.borrow_mut().parse_cmdline(key, value)
-    }));
+    ctx.add_cmdline_parser_callback(|key, value| mount_args.borrow_mut().parse_cmdline(key, value));
 
     if let Err(e) = run(&mut ctx, &mount_args) {
         println!("{e}");
