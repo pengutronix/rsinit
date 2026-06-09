@@ -9,6 +9,7 @@ use std::fmt::Write as _;
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::io::Write as _;
+use std::mem::take;
 use std::os::fd::AsFd;
 use std::os::unix::ffi::OsStrExt;
 use std::panic::set_hook;
@@ -19,7 +20,7 @@ use nix::sys::reboot::{reboot, RebootMode};
 use nix::sys::termios::tcdrain;
 use nix::unistd::{chdir, chroot, dup2_stderr, dup2_stdout, execv, unlink};
 
-use crate::cmdline::{CmdlineCallback, CmdlineOptions, CmdlineOptionsParser};
+use crate::cmdline::{CmdlineOptions, CmdlineOptionsParser};
 #[cfg(feature = "dmverity")]
 use crate::dmverity::prepare_dmverity;
 use crate::mount::{
@@ -89,9 +90,47 @@ fn finalize() {
     let _ = reboot(RebootMode::RB_AUTOBOOT);
 }
 
+/// The lifecycle phases where callbacks can be registered.
+///
+/// # Example
+///
+/// ```no_run
+/// use rsinit::init::{CallBack, InitContext};
+///
+/// let mut ctx = InitContext::new()?;
+/// ctx.add_callback(CallBack::PostSetup, |ctx| {
+///     println!("Post setup phase");
+///     Ok(())
+/// });
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum CallBack {
+    /// Executed after the initial setup (mounting special filesystems, setting up logging, and parsing cmdline).
+    PostSetup,
+    /// Executed after the root filesystem has been mounted, before switching root.
+    PostRootMount,
+    /// Executed after switching the root filesystem, before starting the next init process.
+    PostSwitchRoot,
+}
+
+pub trait InitCallback {
+    fn call(&mut self, ctx: &mut InitContext) -> Result<()>;
+}
+
+impl<F> InitCallback for F
+where
+    F: FnMut(&mut InitContext) -> Result<()>,
+{
+    fn call(&mut self, ctx: &mut InitContext) -> Result<()> {
+        self(ctx)
+    }
+}
+
 pub struct InitContext<'a> {
     pub options: CmdlineOptions,
     parser: CmdlineOptionsParser<'a>,
+    callbacks: Vec<(CallBack, Box<dyn InitCallback + 'a>)>,
 }
 
 impl<'a> InitContext<'a> {
@@ -106,6 +145,7 @@ impl<'a> InitContext<'a> {
         Ok(Self {
             options: CmdlineOptions::default(),
             parser: CmdlineOptionsParser::new(),
+            callbacks: Vec::default(),
         })
     }
 
@@ -135,6 +175,29 @@ impl<'a> InitContext<'a> {
     /// ```
     pub fn add_cmdline_parser_callback(&mut self, cb: Box<CmdlineCallback<'a>>) {
         self.parser.add_callback(cb);
+    }
+
+    /// Register a callback to be executed during a specific lifecycle phase.
+    ///
+    /// Callbacks are executed in the order they were registered for a given [`CallBack`] phase.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use rsinit::init::{CallBack, InitContext};
+    ///
+    /// let mut ctx = InitContext::new()?;
+    /// ctx.add_callback(CallBack::PostRootMount, |ctx| {
+    ///     println!("The root filesystem has been mounted!");
+    ///     Ok(())
+    /// });
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn add_callback<F>(&mut self, kind: CallBack, cb: F)
+    where
+        F: FnMut(&mut InitContext) -> Result<()> + 'a,
+    {
+        self.callbacks.push((kind, Box::new(cb)));
     }
 
     pub fn setup(&mut self) -> Result<()> {
@@ -227,6 +290,7 @@ impl<'a> InitContext<'a> {
 
     pub fn finish(self: &mut InitContext<'a>) -> Result<()> {
         self.switch_root()?;
+        self.run_callbacks(CallBack::PostSwitchRoot)?;
         self.start_init()?;
 
         Ok(())
@@ -246,13 +310,31 @@ impl<'a> InitContext<'a> {
         }
     }
 
+    fn run_callbacks(self: &mut InitContext<'a>, target_kind: CallBack) -> Result<()> {
+        let mut cbs = take(&mut self.callbacks);
+
+        for (kind, ref mut cb) in cbs.iter_mut() {
+            if *kind == target_kind {
+                cb.call(self)?;
+            }
+        }
+
+        self.callbacks = cbs;
+
+        Ok(())
+    }
+
     fn run_impl(self: &mut InitContext<'a>) -> Result<()> {
         self.setup()?;
+
+        self.run_callbacks(CallBack::PostSetup)?;
 
         #[cfg(any(feature = "dmverity", feature = "usb9pfs"))]
         self.prepare_aux()?;
 
         self.mount_root()?;
+
+        self.run_callbacks(CallBack::PostRootMount)?;
 
         if self.options.bind_modules {
             mount_bind_kernel_modules()?;
