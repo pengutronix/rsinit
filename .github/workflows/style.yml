@@ -1,0 +1,23 @@
+name: style check
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  style:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+    - name: Install codespell
+      run: |
+        sudo apt-get update
+        sudo DEBIAN_FRONTEND='noninteractive' apt-get install -qy codespell
+
+    - name: Run codespell check
+      run: |
+        codespell -L parms,cas src test examples
