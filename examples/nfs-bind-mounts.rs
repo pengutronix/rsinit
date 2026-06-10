@@ -1,41 +1,16 @@
 // SPDX-FileCopyrightText: 2026 The rsinit Authors
 // SPDX-License-Identifier: GPL-2.0-only
 
+use std::cell::RefCell;
 use std::net::IpAddr;
-use std::{cell::RefCell, env};
 
 extern crate rsinit;
 
 use log::{error, info};
 use nix::mount::MsFlags;
 use rsinit::mount::do_mount;
-#[cfg(feature = "systemd")]
-use rsinit::systemd::shutdown;
 use rsinit::util::Result;
 use rsinit::{cmdline::ensure_value, init::InitContext};
-
-fn run(ctx: &mut InitContext, mount_args: &RefCell<MountArgs>) -> Result<()> {
-    let cmd = env::args().next().ok_or("No cmd to run as found")?;
-    println!("Running {cmd}...");
-
-    match cmd.as_str() {
-        #[cfg(feature = "systemd")]
-        "/shutdown" => shutdown(),
-        _ => {
-            ctx.setup()?;
-
-            #[cfg(any(feature = "dmverity", feature = "usb9pfs"))]
-            ctx.prepare_aux()?;
-
-            ctx.mount_root()?;
-
-            mount_args.borrow_mut().do_mounts()?;
-
-            ctx.finish()?;
-            Ok(())
-        }
-    }
-}
 
 fn main() -> Result<()> {
     // This object needs to be alive as long as the InitContext is alive! The RefCell allows us to
@@ -43,17 +18,11 @@ fn main() -> Result<()> {
     let mount_args = RefCell::new(MountArgs::default());
 
     let mut ctx = InitContext::new()?;
-    ctx.add_cmdline_parser_callback(Box::new(|key, value| {
-        mount_args.borrow_mut().parse_cmdline(key, value)
-    }));
-
-    if let Err(e) = run(&mut ctx, &mount_args) {
-        println!("{e}");
-    }
-
-    drop(ctx);
-
-    Ok(())
+    ctx.add_cmdline_parser_callback(|key, value| mount_args.borrow_mut().parse_cmdline(key, value));
+    ctx.add_callback(rsinit::init::CallBack::PostRootMount, |_ctx| {
+        mount_args.borrow_mut().do_mounts()
+    });
+    ctx.run_from_env()
 }
 
 #[derive(Debug, PartialEq)]

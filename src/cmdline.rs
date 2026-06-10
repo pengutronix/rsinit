@@ -48,7 +48,7 @@ impl CmdlineOptions {
         &mut self,
         key: &str,
         value: Option<&str>,
-        callbacks: &mut [Box<CmdlineCallback<'a>>],
+        callbacks: &mut [Box<dyn CmdlineCallback + 'a>],
     ) -> Result<()> {
         match key {
             "root" => self.root = Some(ensure_value(key, value)?.to_string()),
@@ -62,7 +62,7 @@ impl CmdlineOptions {
             "rsinit.bind_modules" => self.bind_modules = true,
             _ => {
                 for cb in callbacks {
-                    cb(key, value)?
+                    cb.call(key, value)?
                 }
             }
         }
@@ -115,11 +115,22 @@ impl CmdlineOptions {
     }
 }
 
-pub type CmdlineCallback<'a> = dyn FnMut(&str, Option<&str>) -> Result<()> + 'a;
+pub trait CmdlineCallback {
+    fn call(&mut self, key: &str, value: Option<&str>) -> Result<()>;
+}
+
+impl<F> CmdlineCallback for F
+where
+    F: FnMut(&str, Option<&str>) -> Result<()>,
+{
+    fn call(&mut self, key: &str, value: Option<&str>) -> Result<()> {
+        self(key, value)
+    }
+}
 
 #[derive(Default)]
 pub struct CmdlineOptionsParser<'a> {
-    callbacks: Vec<Box<CmdlineCallback<'a>>>,
+    callbacks: Vec<Box<dyn CmdlineCallback + 'a>>,
 }
 
 impl<'a> CmdlineOptionsParser<'a> {
@@ -127,7 +138,7 @@ impl<'a> CmdlineOptionsParser<'a> {
         Self::default()
     }
 
-    pub fn add_callback(&mut self, cb: Box<CmdlineCallback<'a>>) {
+    pub fn add_callback(&mut self, cb: Box<dyn CmdlineCallback + 'a>) {
         self.callbacks.push(cb);
     }
 

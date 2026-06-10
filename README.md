@@ -131,6 +131,66 @@ rsinit will refuse to bind-mount `/lib/modules` with an error if:
 1. `/lib/modules/<uname --kernel-release>` does not exist
 2. `/lib/modules/` contains files or folders which do not match the current kernel release
 
+rsinit as a library
+-------------------
+
+### Modification using callbacks
+
+When using `rsinit` as a crate in a custom implementation, you can use callbacks
+to extend its functionality without modifying the core logic.
+The [`nfs-bind-mounts`](examples/nfs-bind-mounts.rs) example contains a fully
+working example implementation.
+
+#### Command Line Parser Callbacks
+
+You can register callbacks to parse custom kernel command-line parameters.
+This is useful when your custom initialization logic requires parameters that the
+built-in parser does not handle.
+
+```rust
+use std::cell::RefCell;
+use rsinit::cmdline::ensure_value;
+use rsinit::init::InitContext;
+
+let custom_option = RefCell::new(String::new());
+let mut ctx = InitContext::new()?;
+
+ctx.add_cmdline_parser_callback(|key, val| {
+    if key == "my.option" {
+        *custom_option.borrow_mut() = ensure_value(key, val)?.to_owned();
+    }
+    Ok(())
+});
+ctx.run_from_env()?;
+```
+
+#### Init Callbacks
+
+Init callbacks allow you to execute custom logic at specific life cycle phases
+during the initialization process.
+The available phases are defined in the `CallBack` enum:
+
+- `PostSetup`: Executed after the initial setup (mounting special filesystems,
+  setting up logging, and parsing cmdline).
+- `PostRootMount`: Executed after the root filesystem has been mounted, before
+  switching root.
+- `PostSwitchRoot`: Executed after switching the root filesystem, before
+  starting the next init process.
+
+You can register multiple callbacks for the same phase, and they will be
+executed in the order they were registered.
+
+```rust
+use rsinit::init::{CallBack, InitContext};
+
+let mut ctx = InitContext::new()?;
+ctx.add_callback(CallBack::PostRootMount, |ctx| {
+    println!("The root filesystem has been mounted!");
+    Ok(())
+});
+ctx.run_from_env()?;
+```
+
 Cross compilation with cross.rs
 -------------------------------
 
