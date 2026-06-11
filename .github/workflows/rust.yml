@@ -31,9 +31,16 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/
+            target/
+          key: ${{ runner.os }}-cargo-${{ matrix.version }}-${{ hashFiles('**/Cargo.lock') }}
       - run: rustup toolchain install ${{ matrix.version }}
-      - run: rustup run ${{ matrix.version }} cargo build --all-targets --all-features --verbose
-      - run: rustup run ${{ matrix.version }} cargo test --all-targets --all-features --verbose
+      - run: rustup default ${{ matrix.version }}
+      - run: cargo build --all-targets --all-features --verbose
+      - run: cargo test --all-targets --all-features --verbose
 
   clippy:
     strategy:
