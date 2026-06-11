@@ -41,7 +41,7 @@ def assert_apivfs(result):
 def test_basic_ext4(genimage, qemu):
     qemu.set_initramfs(genimage.get_initramfs())
     qemu.set_diskimage(genimage.get_ext4_disk())
-    qemu.set_cmdline("rootwait root=/dev/vda1 rootfstype=ext4")
+    qemu.set_cmdline("rootwait root=/dev/vda1")
     result = qemu.run()
     result.assert_system_state()
     root_mount = result.get_mount(mount_point="/")
@@ -90,7 +90,7 @@ def test_nfs_bind_mounts(rsinit, genimage, qemu):
 
 def test_missing_root(genimage, qemu):
     qemu.set_initramfs(genimage.get_initramfs())
-    qemu.set_cmdline("root=/dev/vda1 rootfstype=ext4")
+    qemu.set_cmdline("root=/dev/vda1")
     result = qemu.run()
     assert result.rsinit_messages == [
         {"message": "Timeout reached while waiting for the device"}
@@ -103,7 +103,7 @@ def test_verity(rsinit, genimage, qemu):
     qemu.set_diskimage(disk)
     files = {"/init": rsinit.rdinit_path, "/verity-params": verity_params}
     qemu.set_initramfs(genimage.create_initramfs_with_files("ext4-verity", files))
-    qemu.set_cmdline("rootwait rsinit.verity_root=/dev/vda1 rootfstype=ext4")
+    qemu.set_cmdline("rootwait rsinit.verity_root=/dev/vda1")
     result = qemu.run()
     result.assert_system_state()
     root_mount = result.get_mount(mount_point="/")
