@@ -12,7 +12,7 @@ use std::os::fd::AsFd;
 use std::os::unix::ffi::OsStrExt;
 use std::panic::set_hook;
 
-use log::{debug, error, LevelFilter};
+use log::{error, info};
 #[cfg(feature = "reboot-on-failure")]
 use nix::sys::reboot::{reboot, RebootMode};
 use nix::sys::termios::tcdrain;
@@ -50,12 +50,6 @@ fn setup_console() -> Result<()> {
 
     let _ = unlink("/dev/console");
 
-    Ok(())
-}
-
-pub fn setup_log() -> Result<()> {
-    let logger = Logger::new()?;
-    log::set_boxed_logger(Box::new(logger)).map(|()| log::set_max_level(LevelFilter::Trace))?;
     Ok(())
 }
 
@@ -182,7 +176,12 @@ impl<'a> InitContext<'a> {
     pub fn setup(&mut self) -> Result<()> {
         mount_special()?;
 
-        setup_log()?;
+        Logger::enable()?;
+        info!(concat!(
+            env!("CARGO_PKG_NAME"),
+            " version ",
+            env!("CARGO_PKG_VERSION")
+        ));
 
         self.options = self.parser.parse_file("/proc/cmdline")?;
 
@@ -260,7 +259,7 @@ impl<'a> InitContext<'a> {
             write!(buf, "{} ", arg.to_bytes().escape_ascii())?;
         }
         writeln!(buf, "...")?;
-        debug!("{}", &buf);
+        info!("{}", &buf);
 
         execv(&args[0], &args)?;
 
