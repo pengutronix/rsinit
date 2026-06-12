@@ -40,6 +40,27 @@ pub fn mount_apivfs(dst: &str, fstype: &str, flags: MsFlags, data: Option<&str>)
     Ok(())
 }
 
+pub fn mount_regular(
+    src: Option<&str>,
+    dst: &str,
+    fstype: Option<&str>,
+    flags: MsFlags,
+    data: Option<&str>,
+) -> Result<()> {
+    if fstype.is_some() {
+        do_mount(src, dst, fstype, flags, data)
+    } else {
+        let mut result = Ok(());
+        for fstype in ["ext4", "erofs", "squashfs", "f2fs", "btrfs"] {
+            result = do_mount(src, dst, Some(fstype), flags, data);
+            if result.is_ok() {
+                return Ok(());
+            }
+        }
+        result
+    }
+}
+
 pub fn mount_root(
     device: Option<&str>,
     fstype: Option<&str>,
@@ -61,7 +82,7 @@ pub fn mount_root(
         fsflags.bits(),
         flags.unwrap_or_default()
     );
-    do_mount(device, "/root", fstype, fsflags, flags)?;
+    mount_regular(device, "/root", fstype, fsflags, flags)?;
 
     Ok(())
 }
