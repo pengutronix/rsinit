@@ -21,6 +21,9 @@ use nix::unistd::{chdir, chroot, dup2_stderr, dup2_stdout, execv, unlink};
 use crate::cmdline::{CmdlineOptions, CmdlineOptionsParser};
 #[cfg(feature = "dmverity")]
 use crate::dmverity::prepare_dmverity;
+#[cfg(feature = "integration-test")]
+use crate::integration::IntegrationLogger as Logger;
+#[cfg(not(feature = "integration-test"))]
 use crate::kmsg::KmsgLogger as Logger;
 use crate::mount::{
     mount_bind_kernel_modules, mount_move_special, mount_overlay, mount_root, mount_special,
