@@ -303,7 +303,7 @@ impl<'a> InitContext<'a> {
         };
 
         if let Err(e) = result {
-            println!("{e}");
+            error!("{e}");
         }
     }
 
