@@ -177,6 +177,11 @@ impl<'a> InitContext<'a> {
         mount_special()?;
 
         Logger::enable()?;
+        info!(concat!(
+            env!("CARGO_PKG_NAME"),
+            " version ",
+            env!("CARGO_PKG_VERSION")
+        ));
 
         self.options = self.parser.parse_file("/proc/cmdline")?;
 
