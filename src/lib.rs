@@ -5,6 +5,9 @@ pub mod cmdline;
 #[cfg(feature = "dmverity")]
 pub mod dmverity;
 pub mod init;
+#[cfg(feature = "integration-test")]
+pub mod integration;
+pub mod kmsg;
 pub mod mount;
 #[cfg(feature = "systemd")]
 pub mod systemd;

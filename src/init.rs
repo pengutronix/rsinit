@@ -1,20 +1,18 @@
 // SPDX-FileCopyrightText: 2025 The rsinit Authors
 // SPDX-License-Identifier: GPL-2.0-only
 
-use std::borrow::Borrow;
 use std::env;
 use std::env::current_exe;
 use std::ffi::CString;
 use std::fmt::Write as _;
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
 use std::io;
-use std::io::Write as _;
 use std::mem::take;
 use std::os::fd::AsFd;
 use std::os::unix::ffi::OsStrExt;
 use std::panic::set_hook;
 
-use log::{debug, Level, LevelFilter, Metadata, Record};
+use log::{debug, error, LevelFilter};
 #[cfg(feature = "reboot-on-failure")]
 use nix::sys::reboot::{reboot, RebootMode};
 use nix::sys::termios::tcdrain;
@@ -23,6 +21,10 @@ use nix::unistd::{chdir, chroot, dup2_stderr, dup2_stdout, execv, unlink};
 use crate::cmdline::{CmdlineOptions, CmdlineOptionsParser};
 #[cfg(feature = "dmverity")]
 use crate::dmverity::prepare_dmverity;
+#[cfg(feature = "integration-test")]
+use crate::integration::IntegrationLogger as Logger;
+#[cfg(not(feature = "integration-test"))]
+use crate::kmsg::KmsgLogger as Logger;
 use crate::mount::{
     mount_bind_kernel_modules, mount_move_special, mount_overlay, mount_root, mount_special,
     mount_tmpfs_overlay,
@@ -51,34 +53,8 @@ fn setup_console() -> Result<()> {
     Ok(())
 }
 
-struct KmsgLogger {
-    kmsg: File,
-}
-
-impl log::Log for KmsgLogger {
-    fn enabled(&self, _: &Metadata) -> bool {
-        true
-    }
-    fn log(&self, record: &Record) {
-        let level = match record.level() {
-            Level::Error => 3,
-            Level::Warn => 4,
-            /* 5 == notice has no equivalent */
-            Level::Info => 6,
-            Level::Debug | Level::Trace => 7,
-        } | (1 << 3);
-        /* Format first to ensure that the whole message is written with
-         * one write() system-call */
-        let msg = format!("<{level}> rsinit: {}", record.args());
-        let _ = self.kmsg.borrow().write_all(msg.as_bytes());
-    }
-    fn flush(&self) {}
-}
-
 pub fn setup_log() -> Result<()> {
-    let logger = KmsgLogger {
-        kmsg: OpenOptions::new().write(true).open("/dev/kmsg")?,
-    };
+    let logger = Logger::new()?;
     log::set_boxed_logger(Box::new(logger)).map(|()| log::set_max_level(LevelFilter::Trace))?;
     Ok(())
 }
@@ -327,7 +303,7 @@ impl<'a> InitContext<'a> {
         };
 
         if let Err(e) = result {
-            println!("{e}");
+            error!("{e}");
         }
     }
 
