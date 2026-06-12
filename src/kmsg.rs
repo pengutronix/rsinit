@@ -5,7 +5,7 @@ use std::borrow::Borrow;
 use std::fs::{File, OpenOptions};
 use std::io::Write as _;
 
-use log::{Level, Metadata, Record};
+use log::{Level, LevelFilter, Metadata, Record};
 
 use crate::util::Result;
 
@@ -37,5 +37,10 @@ impl KmsgLogger {
     pub fn new() -> Result<KmsgLogger> {
         let kmsg = OpenOptions::new().write(true).open("/dev/kmsg")?;
         Ok(KmsgLogger { kmsg })
+    }
+    pub fn enable() -> Result<()> {
+        let logger = KmsgLogger::new()?;
+        log::set_boxed_logger(Box::new(logger)).map(|()| log::set_max_level(LevelFilter::Trace))?;
+        Ok(())
     }
 }
