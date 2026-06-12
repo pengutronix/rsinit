@@ -12,6 +12,7 @@ use std::os::fd::AsFd;
 use std::os::unix::ffi::OsStrExt;
 use std::panic::set_hook;
 
+use git_version::git_version;
 use log::{error, info};
 #[cfg(feature = "reboot-on-failure")]
 use nix::sys::reboot::{reboot, RebootMode};
@@ -177,6 +178,10 @@ impl<'a> InitContext<'a> {
         mount_special()?;
 
         Logger::enable()?;
+        info!(
+            concat!(env!("CARGO_PKG_NAME"), " version {}"),
+            git_version!(fallback = env!("CARGO_PKG_VERSION"))
+        );
 
         self.options = self.parser.parse_file("/proc/cmdline")?;
 
