@@ -12,7 +12,7 @@ use std::os::fd::AsFd;
 use std::os::unix::ffi::OsStrExt;
 use std::panic::set_hook;
 
-use log::{debug, error, LevelFilter};
+use log::{error, info, LevelFilter};
 #[cfg(feature = "reboot-on-failure")]
 use nix::sys::reboot::{reboot, RebootMode};
 use nix::sys::termios::tcdrain;
@@ -260,7 +260,7 @@ impl<'a> InitContext<'a> {
             write!(buf, "{} ", arg.to_bytes().escape_ascii())?;
         }
         writeln!(buf, "...")?;
-        debug!("{}", &buf);
+        info!("{}", &buf);
 
         execv(&args[0], &args)?;
 
