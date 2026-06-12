@@ -4,7 +4,7 @@
 use std::fs::{self, remove_dir};
 use std::path::{Path, PathBuf};
 
-use log::{debug, warn};
+use log::{info, warn};
 use nix::{
     mount::{mount, umount, MsFlags},
     sys::utsname::uname,
@@ -54,7 +54,7 @@ pub fn mount_root(
     }
     mkdir("/root")?;
 
-    debug!(
+    info!(
         "Mounting rootfs {} -> /root as '{}' with flags = {:#x}, data = '{}'",
         device.ok_or("No root device argument")?,
         fstype.unwrap_or_default(),

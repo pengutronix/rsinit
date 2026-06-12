@@ -5,7 +5,7 @@ use std::fs::{read_dir, write};
 use std::os::unix::fs::symlink;
 use std::{thread, time};
 
-use log::debug;
+use log::info;
 use nix::mount::MsFlags;
 
 use crate::cmdline::CmdlineOptions;
@@ -17,7 +17,7 @@ fn write_file<C: AsRef<[u8]>>(path: &str, content: C) -> Result<()> {
 }
 
 fn setup_9pfs_gadget(options: &mut CmdlineOptions) -> Result<()> {
-    debug!("Initializing USB 9pfs gadget ...");
+    info!("Initializing USB 9pfs gadget ...");
 
     let device = if let Some(root) = &mut options.root {
         if let Some(index) = root.find('/') {
@@ -71,7 +71,7 @@ fn setup_9pfs_gadget(options: &mut CmdlineOptions) -> Result<()> {
     mkdir(&function)?;
     symlink(&function, &link)?;
 
-    debug!("Attaching 9pfs gatget to UDC {device}");
+    info!("Attaching 9pfs gatget to UDC {device}");
     write_file("/sys/kernel/config/usb_gadget/9pfs/UDC", device)?;
 
     let d = time::Duration::new(1, 0);
