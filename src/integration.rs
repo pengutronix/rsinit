@@ -7,7 +7,7 @@ use std::fs::{File, OpenOptions};
 use std::io::Write as _;
 use std::path::Path;
 
-use log::{Metadata, Record};
+use log::{LevelFilter, Metadata, Record};
 
 use crate::kmsg::KmsgLogger;
 use crate::util::Result;
@@ -37,6 +37,11 @@ impl IntegrationLogger {
         let vport = find_vport()?;
         let kmsg = KmsgLogger::new()?;
         Ok(IntegrationLogger { next: kmsg, vport })
+    }
+    pub fn enable() -> Result<()> {
+        let logger = IntegrationLogger::new()?;
+        log::set_boxed_logger(Box::new(logger)).map(|()| log::set_max_level(LevelFilter::Trace))?;
+        Ok(())
     }
 }
 

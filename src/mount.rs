@@ -4,7 +4,7 @@
 use std::fs::{self, remove_dir};
 use std::path::{Path, PathBuf};
 
-use log::{debug, warn};
+use log::{info, warn};
 use nix::{
     mount::{mount, umount, MsFlags},
     sys::utsname::uname,
@@ -23,7 +23,7 @@ pub fn do_mount(
 
     mount(src, dst, fstype, flags, data).map_err(|e| {
         format!(
-            "Failed to mount {} -> {} as {} with flags = {:#x}, data = '{}'): {e}",
+            "Failed to mount {} -> {} as '{}' with flags = {:#x}, data = '{}'): {e}",
             src.unwrap_or_default(),
             dst,
             fstype.unwrap_or_default(),
@@ -75,8 +75,8 @@ pub fn mount_root(
     }
     mkdir("/root")?;
 
-    debug!(
-        "Mounting rootfs {} -> /root as {} with flags = {:#x}, data = '{}'",
+    info!(
+        "Mounting rootfs {} -> /root as '{}' with flags = {:#x}, data = '{}'",
         device.ok_or("No root device argument")?,
         fstype.unwrap_or_default(),
         fsflags.bits(),

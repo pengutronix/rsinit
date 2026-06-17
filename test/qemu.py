@@ -107,7 +107,7 @@ class Qemu:
 
     def run(self):
         args = [f"qemu-system-{self.__arch}"]
-        cmdline = "loglevel=8 panic=-1"
+        cmdline = "loglevel=7 panic=-1"
         match self.__arch:
             case "x86_64":
                 args += ["-machine", "q35"]

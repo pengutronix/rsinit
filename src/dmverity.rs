@@ -7,7 +7,7 @@ use std::os::fd::IntoRawFd;
 use std::path::Path;
 
 use getrandom::getrandom;
-use log::debug;
+use log::{debug, info};
 use nix::ioctl_readwrite;
 use nix::libc::dev_t;
 use nix::sys::stat::minor;
@@ -246,7 +246,7 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
     let param_data = read_file("/verity-params")?;
     let params = VerityParams::from_string(&param_data)?;
 
-    debug!(
+    info!(
         "Configuring dm-verity rootfs with root-hash = {}",
         params.root_hash
     );
