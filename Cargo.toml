@@ -26,7 +26,7 @@ name = "integration-test"
 required-features = ["integration-test"]
 
 [dependencies]
-nix = { version = "0.30.1", features = ["feature", "fs", "mount", "process", "term"], default-features = false }
+nix = { version = "0.31.3", features = ["feature", "fs", "mount", "process", "term"], default-features = false }
 getrandom = { version = "0.2.15" }
 log = { version = "0.4.21", features = ["std"], default-features = false}
 json = { version = "0.12.4", optional = true }
