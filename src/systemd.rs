@@ -71,5 +71,4 @@ pub fn shutdown() -> Result<()> {
         _ => RebootMode::RB_AUTOBOOT,
     };
     reboot(arg).map_err(|e| format!("reboot failed: {e}"))?;
-    Ok(())
 }

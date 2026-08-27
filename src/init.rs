@@ -262,8 +262,6 @@ impl<'a> InitContext<'a> {
         info!("{}", buf);
 
         execv(&args[0], &args)?;
-
-        Ok(())
     }
 
     pub fn finish(self: &mut InitContext<'a>) -> Result<()> {
