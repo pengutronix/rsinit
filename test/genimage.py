@@ -58,7 +58,7 @@ class GenImage:
             ]
             if root:
                 args += ["--root", root.name]
-            subprocess.run(args, env=self._sbin_env()).check_returncode()
+            subprocess.run(args, env=self._sbin_env(), check=True)
 
     def __image_file(self, name):
         return self.__image_path / name
@@ -170,10 +170,10 @@ image {name} {{
             for line in output:
                 try:
                     key, value = line.split(":", 1)
+                    value = value.strip().partition(" ")[0]
                 except ValueError:
                     continue
                 key = "VERITY_" + key.strip().upper().replace(" ", "_")
-                value = value.strip()
                 verity_config.write(f"{key}={value}\n")
             verity_config.write(f"VERITY_DATA_SECTORS={int(size / 512)}\n")
             return verity_params

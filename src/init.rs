@@ -14,10 +14,11 @@ use std::panic::set_hook;
 
 use git_version::git_version;
 use log::{error, info};
+use nix::mount::{umount2, MntFlags};
 #[cfg(feature = "reboot-on-failure")]
 use nix::sys::reboot::{reboot, RebootMode};
 use nix::sys::termios::tcdrain;
-use nix::unistd::{chdir, chroot, dup2_stderr, dup2_stdout, execv, unlink};
+use nix::unistd::{chdir, chroot, dup2_stderr, dup2_stdout, execv, pivot_root, unlink};
 
 use crate::cmdline::{CmdlineOptions, CmdlineOptionsParser};
 #[cfg(feature = "dmverity")]
@@ -27,8 +28,8 @@ use crate::integration::IntegrationLogger as Logger;
 #[cfg(not(feature = "integration-test"))]
 use crate::kmsg::KmsgLogger as Logger;
 use crate::mount::{
-    mount_bind_kernel_modules, mount_move_special, mount_overlay, mount_root, mount_special,
-    mount_tmpfs_overlay,
+    mount_bind_kernel_modules, mount_move, mount_move_special, mount_overlay, mount_root,
+    mount_special, mount_tmpfs_overlay,
 };
 #[cfg(feature = "systemd")]
 use crate::systemd::{mount_systemd, shutdown};
@@ -201,6 +202,20 @@ impl<'a> InitContext<'a> {
         Ok(())
     }
 
+    fn switch_root_pivot(self: &mut InitContext<'a>) -> Result<()> {
+        pivot_root(".", ".")?;
+        umount2(".", MntFlags::MNT_DETACH)?;
+
+        Ok(())
+    }
+
+    fn switch_root_move(self: &mut InitContext<'a>) -> Result<()> {
+        mount_move(".", "/", false)?;
+        chroot(".")?;
+
+        Ok(())
+    }
+
     pub fn switch_root(self: &mut InitContext<'a>) -> Result<()> {
         #[cfg(feature = "systemd")]
         mount_systemd(&mut self.options)?;
@@ -213,8 +228,11 @@ impl<'a> InitContext<'a> {
         mount_move_special(self.options.cleanup)?;
 
         chdir("/root")?;
-        chroot(".")?;
-        chdir("/")?;
+        if let Err(e) = self.switch_root_pivot() {
+            info!("pivot_root failed, moving mounts instead: {e}");
+            self.switch_root_move()?;
+        }
+
         Ok(())
     }
 
@@ -246,6 +264,7 @@ impl<'a> InitContext<'a> {
         )
     }
 
+    #[allow(unreachable_code)]
     pub fn start_init(self: &InitContext<'a>) -> Result<()> {
         let mut args = Vec::new();
         args.push(CString::new(self.options.init.as_str())?);
@@ -263,7 +282,7 @@ impl<'a> InitContext<'a> {
 
         execv(&args[0], &args)?;
 
-        Ok(())
+        Ok(()) // Actually unreachable
     }
 
     pub fn finish(self: &mut InitContext<'a>) -> Result<()> {

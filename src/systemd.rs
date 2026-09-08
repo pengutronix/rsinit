@@ -62,6 +62,7 @@ fn umount_root() -> Result<()> {
     Ok(())
 }
 
+#[allow(unreachable_code)]
 pub fn shutdown() -> Result<()> {
     umount_root()?;
     let arg = match env::args().nth(1).as_deref() {
@@ -71,5 +72,6 @@ pub fn shutdown() -> Result<()> {
         _ => RebootMode::RB_AUTOBOOT,
     };
     reboot(arg).map_err(|e| format!("reboot failed: {e}"))?;
-    Ok(())
+
+    Ok(()) // Actually unreachable
 }

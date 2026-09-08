@@ -87,7 +87,7 @@ pub fn mount_root(
     Ok(())
 }
 
-fn mount_move(src: &str, dst: &str, cleanup: bool) -> Result<()> {
+pub fn mount_move(src: &str, dst: &str, cleanup: bool) -> Result<()> {
     mount(
         Some(Path::new(src)),
         dst,

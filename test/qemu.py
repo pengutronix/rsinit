@@ -23,6 +23,10 @@ KERNEL_AARCH64_URL = None
 KERNEL_AARCH64_SHA256 = None
 
 
+class ChecksumError(Exception):
+    """Raised when a downloaded file does not match its expected sha256."""
+
+
 class RuntimeStatus:
     def __init__(self, result):
         result = [json.loads(block) for block in result.split("\0") if block]
@@ -34,15 +38,18 @@ class RuntimeStatus:
             self._system_status = result.pop(-1)
             self.mountinfo = self._system_status["mountinfo"]
             self.block_devices = self._system_status.get("block-devices")
+            self.root_mount = self._system_status.get("root-mount")
         else:
             self._system_status = None
             self.mountinfo = None
             self.block_devices = None
+            self.root_mount = None
         self.rsinit_messages = result
 
     def assert_system_state(self):
         assert self.mountinfo, "Missing /proc/self/mountinfo data"
         assert self.block_devices, "Missing /sys/dev/block data"
+        assert self.root_mount is True, "Invalid root mount"
 
     def get_mount(self, *, mount_point=None, filesystem_type=None):
         assert self.mountinfo, "missing mountinfo data"
@@ -101,7 +108,7 @@ class Qemu:
         with open(file, "rb") as f:
             digest = hashlib.file_digest(f, "sha256")
         if digest.hexdigest() != sha256:
-            raise Exception(
+            raise ChecksumError(
                 f"sha256 for {file} does not match: {digest.hexdigest()} != {sha256} (expected)"
             )
 
@@ -163,7 +170,7 @@ class Qemu:
                 "-device",
                 "virtserialport,chardev=rsinit,name=rsinit.result.0",
             ]
-            subprocess.run(args)
+            subprocess.run(args, check=False)
             return RuntimeStatus(result.read())
 
 

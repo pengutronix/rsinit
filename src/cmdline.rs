@@ -20,6 +20,9 @@ pub struct CmdlineOptions {
     pub verity_root: Option<String>,
     pub nfsroot: Option<String>,
     pub init: String,
+    /// Run cleanup code during rootfs pivot/switch. True by default,
+    /// deactivated for systemd boots which runs rs-init again executing the
+    /// shutdown command.
     pub cleanup: bool,
     /// Attempt to bind-mount `/lib/modules` from the initrd at `/root/lib/modules`.
     ///

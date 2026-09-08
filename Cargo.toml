@@ -38,7 +38,7 @@ systemd = ["nix/reboot"]
 dmverity = ["nix/ioctl"]
 usb9pfs = []
 reboot-on-failure = ["nix/reboot"]
-integration-test = ["json", "nix/reboot"]
+integration-test = ["json", "nix/reboot", "nix/sched"]
 
 [profile.release]
 opt-level = 'z'
