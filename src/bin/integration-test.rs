@@ -36,9 +36,8 @@ fn parse_mountinfo() -> Result<json::JsonValue> {
             .collect::<Vec<_>>()
             .into();
         let mut optional_fields = json::JsonValue::new_array();
-        loop {
-            let field = fields.next();
-            if field == Some("-") {
+        for field in fields.by_ref() {
+            if field == "-" {
                 break;
             }
             optional_fields.push(field)?;
