@@ -1,1 +1,3 @@
 /target
+/test/__pycache__
+/bzImage-x86_64
