@@ -52,9 +52,9 @@ impl<'a> VerityParams<'a> {
             match key {
                 "VERITY_DATA_BLOCKS" => data_blocks = value,
                 "VERITY_DATA_SECTORS" => {
-                    data_sectors = value.parse::<u64>().map_err(|e| {
-                        format!("Failed to parse 'VERITY_DATA_SECTORS={data_sectors}: {e}")
-                    })?
+                    data_sectors = value
+                        .parse::<u64>()
+                        .map_err(|e| format!("Failed to parse 'VERITY_DATA_SECTORS={value}: {e}"))?
                 }
                 "VERITY_DATA_BLOCK_SIZE" => data_block_size = value,
                 "VERITY_HASH_BLOCK_SIZE" => hash_block_size = value,
