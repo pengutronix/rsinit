@@ -210,7 +210,7 @@ impl Default for DmTableLoad {
 }
 
 impl DmTableLoad {
-    fn new(params: &VerityParams, root_device: &str, uuid: &str) -> DmTableLoad {
+    fn new(params: &VerityParams, root_device: &str, uuid: &str) -> Result<DmTableLoad> {
         let mut table_load_data = DmTableLoad::default();
         table_load_data
             .header
@@ -243,9 +243,16 @@ impl DmTableLoad {
             opt_params = params.verity_params.1
         );
         let table = table_str.as_bytes();
-        table_load_data.params[..table.len()].copy_from_slice(table);
+
         debug!("Configuring dm-verity with table = '{table_str}'");
+
         table_load_data
+            .params
+            .get_mut(..table.len())
+            .ok_or("dm-verity table size exceeds 1024 bytes")?
+            .copy_from_slice(table);
+
+        Ok(table_load_data)
     }
 }
 
@@ -295,7 +302,7 @@ pub fn prepare_dmverity(options: &mut CmdlineOptions) -> Result<bool> {
     unsafe { dm_dev_create(dm_fd, &mut create_data) }
         .map_err(|e| format!("Failed to create dm device: {e}"))?;
 
-    let mut table_load_data = DmTableLoad::new(&params, root_device, &uuid);
+    let mut table_load_data = DmTableLoad::new(&params, root_device, &uuid)?;
 
     unsafe { dm_table_load(dm_fd, &mut table_load_data.header) }
         .map_err(|e| format!("Failed to load dm table: {e}"))?;
@@ -358,7 +365,8 @@ VERITY_DATA_SECTORS=212992";
         assert_eq!(create_data.data_size as usize, size_of::<DmIoctl>());
 
         let params = VerityParams::from_string(param_data).expect("parsing params failed");
-        let table_load_data = DmTableLoad::new(&params, root_device, &uuid);
+        let table_load_data = DmTableLoad::new(&params, root_device, &uuid)
+            .expect("failed to construct dm-verity table");
         let expected_table = *b"1 /dev/mmcblk3p2 /dev/mmcblk3p2 4096 4096 26624 26624 sha256 c63dc40d73bdbb4093e3c54592182a6b74ea9e611145ba498033b696c6e072df a224908192cf3202b8c3eda4a5f5c320a82f2f750681e1cb30bac367b08f3973 1 ignore_zero_blocks\0";
         assert_eq!(
             table_load_data.params[..expected_table.len()],
@@ -387,7 +395,8 @@ VERITY_DATA_SECTORS=212992";
         let uuid = "rsinit-verity-root-test-uuid".to_string();
 
         let params = VerityParams::from_string(param_data).expect("parsing params failed");
-        let table_load_data = DmTableLoad::new(&params, root_device, &uuid);
+        let table_load_data = DmTableLoad::new(&params, root_device, &uuid)
+            .expect("failed to construct dm-verity table");
         let expected_table = *b"1 /dev/mmcblk3p2 /dev/mmcblk3p2 4096 4096 26624 26624 sha256 c63dc40d73bdbb4093e3c54592182a6b74ea9e611145ba498033b696c6e072df a224908192cf3202b8c3eda4a5f5c320a82f2f750681e1cb30bac367b08f3973 2 ignore_zero_blocks  panic_on_corruption\0";
         assert_eq!(
             table_load_data.params[..expected_table.len()],
