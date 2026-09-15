@@ -21,11 +21,12 @@ const DM_MAX_TYPE_NAME: usize = 16;
 const DM_NAME_LEN: usize = 128;
 const DM_UUID_LEN: usize = 129;
 
+#[derive(Debug)]
 struct VerityParams<'a> {
-    data_blocks: &'a str,
+    data_blocks: u64,
     data_sectors: u64,
-    data_block_size: &'a str,
-    hash_block_size: &'a str,
+    data_block_size: u64,
+    hash_block_size: u64,
     hash_algorithm: &'a str,
     salt: &'a str,
     root_hash: &'a str,
@@ -34,10 +35,10 @@ struct VerityParams<'a> {
 
 impl<'a> VerityParams<'a> {
     fn from_string(params: &'a str) -> Result<VerityParams<'a>> {
-        let mut data_blocks = "";
+        let mut data_blocks = 0;
         let mut data_sectors = 0;
-        let mut data_block_size = "";
-        let mut hash_block_size = "";
+        let mut data_block_size = 0;
+        let mut hash_block_size = 0;
         let mut hash_algorithm = "";
         let mut salt = "";
         let mut root_hash = "";
@@ -50,14 +51,26 @@ impl<'a> VerityParams<'a> {
             };
 
             match key {
-                "VERITY_DATA_BLOCKS" => data_blocks = value,
+                "VERITY_DATA_BLOCKS" => {
+                    data_blocks = value
+                        .parse::<u64>()
+                        .map_err(|e| format!("Failed to parse 'VERITY_DATA_BLOCKS={value}: {e}"))?
+                }
                 "VERITY_DATA_SECTORS" => {
                     data_sectors = value
                         .parse::<u64>()
                         .map_err(|e| format!("Failed to parse 'VERITY_DATA_SECTORS={value}: {e}"))?
                 }
-                "VERITY_DATA_BLOCK_SIZE" => data_block_size = value,
-                "VERITY_HASH_BLOCK_SIZE" => hash_block_size = value,
+                "VERITY_DATA_BLOCK_SIZE" => {
+                    data_block_size = value.parse::<u64>().map_err(|e| {
+                        format!("Failed to parse 'VERITY_DATA_BLOCK_SIZE={value}: {e}")
+                    })?
+                }
+                "VERITY_HASH_BLOCK_SIZE" => {
+                    hash_block_size = value.parse::<u64>().map_err(|e| {
+                        format!("Failed to parse 'VERITY_HASH_BLOCK_SIZE={value}: {e}")
+                    })?
+                }
                 "VERITY_HASH_ALGORITHM" => hash_algorithm = value,
                 "VERITY_SALT" => salt = value,
                 "VERITY_ROOT_HASH" => root_hash = value,
@@ -65,6 +78,18 @@ impl<'a> VerityParams<'a> {
                 _ => (),
             }
         }
+
+        for (key, value) in [
+            ("VERITY_DATA_BLOCKS", data_blocks),
+            ("VERITY_DATA_SECTORS", data_sectors),
+            ("VERITY_DATA_BLOCK_SIZE", data_block_size),
+            ("VERITY_HASH_BLOCK_SIZE", hash_block_size),
+        ] {
+            if value == 0 {
+                return Err(format!("Missing or invalid {key} in verity params").into());
+            }
+        }
+
         Ok(VerityParams {
             data_blocks,
             data_sectors,
@@ -199,18 +224,23 @@ impl DmTableLoad {
         table_load_data.target_spec.target_type[..target_type.len()].copy_from_slice(target_type);
 
         let table_str = format!(
-            "1 {} {} {} {} {} {} {} {} {} {} {}\0",
-            root_device,
-            root_device,
-            params.data_block_size,
-            params.hash_block_size,
-            params.data_blocks,
-            params.data_blocks,
-            params.hash_algorithm,
-            params.root_hash,
-            params.salt,
-            params.verity_params.0,
-            params.verity_params.1
+            "{version} {dev} {hash_dev} \
+             {data_block_size} {hash_block_size} \
+             {num_data_blocks} {hash_start_block} \
+             {algorithm} {digest} {salt} \
+             {num_opt_params} {opt_params}\0",
+            version = 1,
+            dev = root_device,
+            hash_dev = root_device,
+            data_block_size = params.data_block_size,
+            hash_block_size = params.hash_block_size,
+            num_data_blocks = params.data_blocks,
+            hash_start_block = params.data_blocks * params.data_block_size / params.hash_block_size,
+            algorithm = params.hash_algorithm,
+            digest = params.root_hash,
+            salt = params.salt,
+            num_opt_params = params.verity_params.0,
+            opt_params = params.verity_params.1
         );
         let table = table_str.as_bytes();
         table_load_data.params[..table.len()].copy_from_slice(table);
@@ -285,6 +315,29 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_missing_block_size() {
+        let param_data =
+            "VERITY_DATA_BLOCKS=26624\nVERITY_DATA_SECTORS=212992\nVERITY_DATA_BLOCK_SIZE=4096\n";
+
+        VerityParams::from_string(param_data).expect_err("expected error for incomplete data");
+    }
+
+    #[test]
+    fn test_invalid_block_sizes() {
+        let param_data = "
+VERITY_DATA_BLOCKS=0
+VERITY_DATA_BLOCK_SIZE=0
+VERITY_HASH_BLOCK_SIZE=0
+VERITY_DATA_SECTORS=0
+VERITY_HASH_ALGORITHM=sha256
+VERITY_SALT=a224908192cf3202b8c3eda4a5f5c320a82f2f750681e1cb30bac367b08f3973
+VERITY_ROOT_HASH=c63dc40d73bdbb4093e3c54592182a6b74ea9e611145ba498033b696c6e072df
+VERITY_PARAMS=ignore_zero_blocks  panic_on_corruption ";
+
+        VerityParams::from_string(param_data).expect_err("expected error for invalid block sizes");
+    }
+
+    #[test]
     fn test_basic() {
         let param_data = "
 VERITY_DATA_BLOCKS=26624
@@ -336,6 +389,31 @@ VERITY_DATA_SECTORS=212992";
         let params = VerityParams::from_string(param_data).expect("parsing params failed");
         let table_load_data = DmTableLoad::new(&params, root_device, &uuid);
         let expected_table = *b"1 /dev/mmcblk3p2 /dev/mmcblk3p2 4096 4096 26624 26624 sha256 c63dc40d73bdbb4093e3c54592182a6b74ea9e611145ba498033b696c6e072df a224908192cf3202b8c3eda4a5f5c320a82f2f750681e1cb30bac367b08f3973 2 ignore_zero_blocks  panic_on_corruption\0";
+        assert_eq!(
+            table_load_data.params[..expected_table.len()],
+            expected_table
+        );
+    }
+
+    #[test]
+    fn test_4k_data_block_size_8k_hash_block_size() {
+        let param_data = "
+            VERITY_DATA_BLOCKS = 26624
+            VERITY_DATA_BLOCK_SIZE = 4096
+            VERITY_HASH_BLOCK_SIZE = 8192
+            VERITY_HASH_ALGORITHM = sha256
+            VERITY_SALT = a224908192cf3202b8c3eda4a5f5c320a82f2f750681e1cb30bac367b08f3973
+            VERITY_ROOT_HASH = c63dc40d73bdbb4093e3c54592182a6b74ea9e611145ba498033b696c6e072df
+            VERITY_DATA_SECTORS = 212992
+            VERITY_PARAMS = ignore_zero_blocks  panic_on_corruption ";
+
+        let root_device = "/dev/mmcblk3p2";
+        let uuid = "rsinit-verity-root-test-uuid".to_string();
+
+        let params = VerityParams::from_string(param_data).expect("parsing params failed");
+        let table_load_data = DmTableLoad::new(&params, root_device, &uuid)
+            .expect("failed to construct dm-verity table");
+        let expected_table = *b"1 /dev/mmcblk3p2 /dev/mmcblk3p2 4096 8192 26624 13312 sha256 c63dc40d73bdbb4093e3c54592182a6b74ea9e611145ba498033b696c6e072df a224908192cf3202b8c3eda4a5f5c320a82f2f750681e1cb30bac367b08f3973 2 ignore_zero_blocks  panic_on_corruption\0";
         assert_eq!(
             table_load_data.params[..expected_table.len()],
             expected_table
