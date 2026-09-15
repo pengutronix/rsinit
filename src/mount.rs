@@ -23,7 +23,7 @@ pub fn do_mount(
 
     mount(src, dst, fstype, flags, data).map_err(|e| {
         format!(
-            "Failed to mount {} -> {} as '{}' with flags = {:#x}, data = '{}'): {e}",
+            "Failed to mount {} -> {} as '{}' with flags = {:#x}, data = '{}': {e}",
             src.unwrap_or_default(),
             dst,
             fstype.unwrap_or_default(),
