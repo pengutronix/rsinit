@@ -33,5 +33,5 @@ pub fn wait_for_device(root_device: &str) -> Result<()> {
         thread::sleep(duration);
     }
 
-    Err("Timeout reached while waiting for the device".into())
+    Err(format!("Timeout reached while waiting for device {root_device}").into())
 }

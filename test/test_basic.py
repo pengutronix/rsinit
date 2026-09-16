@@ -93,7 +93,7 @@ def test_missing_root(genimage, qemu):
     qemu.set_cmdline("root=/dev/vda1")
     result = qemu.run()
     assert result.rsinit_messages[-1] == {
-        "message": "Timeout reached while waiting for the device"
+        "message": "Timeout reached while waiting for device /dev/vda1"
     }
     assert not result.mountinfo
 
