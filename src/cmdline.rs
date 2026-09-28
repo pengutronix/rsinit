@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2024 The rsinit Authors
 // SPDX-License-Identifier: GPL-2.0-only
 
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::Range};
 
 use nix::mount::MsFlags;
 
@@ -132,6 +132,43 @@ where
 }
 
 #[derive(Default)]
+struct Token {
+    start: Option<usize>,
+    len: usize,
+}
+
+impl Token {
+    fn is_empty(&self) -> bool {
+        self.start.is_none() || self.len == 0
+    }
+
+    fn is_started(&self) -> bool {
+        self.start.is_some()
+    }
+
+    fn start(&mut self, start: usize) {
+        self.start = Some(start);
+    }
+
+    fn reset(&mut self) {
+        self.start = None;
+        self.len = 0;
+    }
+
+    fn push(&mut self) {
+        self.len += 1;
+    }
+
+    fn range(&self) -> Range<usize> {
+        if let Some(start) = self.start {
+            start..start + self.len
+        } else {
+            0..0
+        }
+    }
+}
+
+#[derive(Default)]
 pub struct CmdlineOptionsParser<'a> {
     callbacks: Vec<Box<dyn CmdlineCallback + 'a>>,
 }
@@ -152,49 +189,54 @@ impl<'a> CmdlineOptionsParser<'a> {
 
     pub fn parse_string(&mut self, cmdline: &str) -> Result<CmdlineOptions> {
         let mut options = CmdlineOptions::default();
-        let mut have_value = false;
         let mut quoted = false;
-        let mut key = &cmdline[0..0];
-        let mut start = 0;
+        let mut key = Token::default();
+        let mut val = Token::default();
 
         for (i, c) in cmdline.char_indices() {
-            let mut skip = false;
             match c {
-                '=' => {
-                    if !have_value {
-                        skip = true;
-                        key = &cmdline[start..i];
-                        start = i;
-                    }
-                    have_value = true;
+                '=' if !val.is_started() => {
+                    val.start(i + 1);
                 }
                 '"' => {
-                    quoted = !quoted;
-                    skip = true;
-                }
-                ' ' | '\n' if !quoted => {
-                    if !have_value {
-                        key = &cmdline[start..i];
+                    if !quoted {
+                        // a quote that opens the value or the option itself is
+                        // not part of it
+                        if val.is_started() && val.is_empty() {
+                            val.start(i + 1);
+                        } else if key.is_empty() {
+                            key.start(i + 1);
+                        }
                     }
+                    quoted = !quoted;
+                }
+                // is_ascii_whitespace doesn't include \v which is included in
+                // isspace used by the kernel cmdline.c parser.
+                c if (c.is_ascii_whitespace() || c as u8 == b'\xa0') && !quoted => {
                     if !key.is_empty() {
                         options.parse_option(
-                            key,
-                            if have_value {
-                                Some(&cmdline[start..i])
-                            } else {
+                            &cmdline[key.range()],
+                            if val.is_empty() {
                                 None
+                            } else {
+                                Some(&cmdline[val.range()])
                             },
                             &mut self.callbacks,
                         )?;
                     }
-                    key = &cmdline[0..0];
-                    have_value = false;
-                    skip = true;
+                    key.reset();
+                    val.reset();
                 }
-                _ => {}
-            }
-            if skip {
-                start = i + 1;
+                _ => {
+                    if !val.is_started() {
+                        if !key.is_started() {
+                            key.start(i);
+                        }
+                        key.push();
+                    } else {
+                        val.push();
+                    }
+                }
             }
         }
 
@@ -347,6 +389,158 @@ mod tests {
         let expected = CmdlineOptions {
             root: Some("/dev/root".into()),
             bind_modules: true,
+            ..Default::default()
+        };
+
+        let options = CmdlineOptionsParser::new()
+            .parse_string(cmdline)
+            .expect("failed");
+
+        assert_eq!(options, expected);
+    }
+
+    #[test]
+    fn test_quoted_values() {
+        let cmdline = "root=\"/dev/mmcblk0p1\" init=\"/bin/sh\"\n";
+
+        let expected = CmdlineOptions {
+            root: Some("/dev/mmcblk0p1".into()),
+            init: "/bin/sh".into(),
+            ..Default::default()
+        };
+
+        let options = CmdlineOptionsParser::new()
+            .parse_string(cmdline)
+            .expect("failed");
+
+        assert_eq!(options, expected);
+    }
+
+    #[test]
+    fn test_fully_quoted_option() {
+        let cmdline = "\"root=/dev/mmcblk0p1\" rw\n";
+
+        let expected = CmdlineOptions {
+            root: Some("/dev/mmcblk0p1".into()),
+            rootfsflags: MsFlags::empty(),
+            ..Default::default()
+        };
+
+        let options = CmdlineOptionsParser::new()
+            .parse_string(cmdline)
+            .expect("failed");
+
+        assert_eq!(options, expected);
+    }
+
+    #[test]
+    fn test_single_char_option() {
+        let cmdline = "x root=/dev/mmcblk0p1\n";
+
+        let expected = CmdlineOptions {
+            root: Some("/dev/mmcblk0p1".into()),
+            ..Default::default()
+        };
+
+        let options = CmdlineOptionsParser::new()
+            .parse_string(cmdline)
+            .expect("failed");
+
+        assert_eq!(options, expected);
+    }
+
+    #[test]
+    fn test_single_char_option_with_value() {
+        let cmdline = "a=b root=/dev/mmcblk0p1\n";
+
+        let expected = CmdlineOptions {
+            root: Some("/dev/mmcblk0p1".into()),
+            ..Default::default()
+        };
+
+        let options = CmdlineOptionsParser::new()
+            .parse_string(cmdline)
+            .expect("failed");
+
+        assert_eq!(options, expected);
+    }
+
+    #[test]
+    fn test_root_partuuid() {
+        let cmdline = "root=PARTUUID=1234-5678 rw\n";
+
+        let expected = CmdlineOptions {
+            root: Some("PARTUUID=1234-5678".into()),
+            rootfsflags: MsFlags::empty(),
+            ..Default::default()
+        };
+
+        let options = CmdlineOptionsParser::new()
+            .parse_string(cmdline)
+            .expect("failed");
+
+        assert_eq!(options, expected);
+    }
+
+    #[test]
+    fn test_quoted_value_with_space() {
+        let cmdline = "root=\"/dev/sda 1\" rw\n";
+
+        let expected = CmdlineOptions {
+            root: Some("/dev/sda 1".into()),
+            rootfsflags: MsFlags::empty(),
+            ..Default::default()
+        };
+
+        let options = CmdlineOptionsParser::new()
+            .parse_string(cmdline)
+            .expect("failed");
+
+        assert_eq!(options, expected);
+    }
+
+    #[test]
+    fn test_empty_value() {
+        let cmdline = "root= rw\n";
+
+        CmdlineOptionsParser::new()
+            .parse_string(cmdline)
+            .expect_err("expected an error");
+    }
+
+    #[test]
+    fn test_quoted_empty_value() {
+        let cmdline = "root=\"\" rw\n";
+
+        CmdlineOptionsParser::new()
+            .parse_string(cmdline)
+            .expect_err("expected an error");
+    }
+
+    #[test]
+    fn test_whitespace_separator() {
+        let cmdline = "root=/dev/mmcblk0p1\trw\n";
+
+        let expected = CmdlineOptions {
+            root: Some("/dev/mmcblk0p1".into()),
+            rootfsflags: MsFlags::empty(),
+            ..Default::default()
+        };
+
+        let options = CmdlineOptionsParser::new()
+            .parse_string(cmdline)
+            .expect("failed");
+
+        assert_eq!(options, expected);
+    }
+
+    #[test]
+    fn test_argument_starting_with_equals() {
+        // "=rw" is no option: the name is empty and the whole token is ignored
+        let cmdline = "=rw root=/dev/mmcblk0p1\n";
+
+        let expected = CmdlineOptions {
+            root: Some("/dev/mmcblk0p1".into()),
             ..Default::default()
         };
 
