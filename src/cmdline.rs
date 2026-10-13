@@ -28,6 +28,8 @@ pub struct CmdlineOptions {
     ///
     /// Enabled by the `rsinit.bind_modules` cmdline flag.
     pub bind_modules: bool,
+    /// Configuration extensions to merge into `/root/etc`, from `rsinit.confext=`.
+    pub confext: Vec<String>,
 }
 
 impl Default for CmdlineOptions {
@@ -42,6 +44,7 @@ impl Default for CmdlineOptions {
             init: "/sbin/init".into(),
             cleanup: true,
             bind_modules: false,
+            confext: Vec::new(),
         }
     }
 }
@@ -63,6 +66,9 @@ impl CmdlineOptions {
             "nfsroot" => self.nfsroot = Some(ensure_value(key, value)?.to_string()),
             "init" => self.init = ensure_value(key, value)?.into(),
             "rsinit.bind_modules" => self.bind_modules = true,
+            "rsinit.confext" => self
+                .confext
+                .extend(ensure_value(key, value)?.split(',').map(str::to_string)),
             _ => {
                 for cb in callbacks {
                     cb.call(key, value)?

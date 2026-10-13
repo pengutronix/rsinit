@@ -32,7 +32,7 @@ use crate::mount::{
     mount_special, mount_tmpfs_overlay,
 };
 #[cfg(feature = "systemd")]
-use crate::systemd::{mount_systemd, shutdown};
+use crate::systemd::{mount_confexts, mount_systemd, shutdown};
 #[cfg(feature = "usb9pfs")]
 use crate::usbg_9pfs::prepare_9pfs_gadget;
 use crate::util::Result;
@@ -354,6 +354,9 @@ impl<'a> InitContext<'a> {
         if self.options.bind_modules {
             mount_bind_kernel_modules()?;
         }
+
+        #[cfg(feature = "systemd")]
+        mount_confexts(&self.options.confext)?;
 
         self.finish()
     }

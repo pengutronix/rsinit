@@ -6,6 +6,7 @@ use std::env;
 use std::fs::read_to_string;
 use std::path::Path;
 
+use log::info;
 use nix::mount::{umount, MsFlags};
 use nix::sys::reboot::{reboot, RebootMode};
 
@@ -74,4 +75,33 @@ pub fn shutdown() -> Result<()> {
     reboot(arg).map_err(|e| format!("reboot failed: {e}"))?;
 
     Ok(()) // Actually unreachable
+}
+
+/// Merge the configuration extensions named on the command-line from
+/// `/usr/lib/confexts/` of the root filesystem into `/root/etc` as a read-only
+/// overlay. Later names take precedence over earlier ones.
+pub fn mount_confexts(names: &[String]) -> Result<()> {
+    if names.is_empty() {
+        return Ok(());
+    }
+
+    let mut lowerdir: Vec<String> = names
+        .iter()
+        .rev()
+        .map(|name| format!("/root/usr/lib/confexts/{name}/etc"))
+        .collect();
+    lowerdir.push("/root/etc".to_string());
+
+    info!(
+        "Merging configuration extension(s) {} into /etc",
+        names.join(", ")
+    );
+
+    do_mount(
+        Some("confext"),
+        "/root/etc",
+        Some("overlay"),
+        MsFlags::MS_RDONLY | MsFlags::MS_NODEV | MsFlags::MS_NOSUID | MsFlags::MS_NOEXEC,
+        Some(&format!("lowerdir={}", lowerdir.join(":"))),
+    )
 }
