@@ -277,3 +277,101 @@ pub fn mount_bind_kernel_modules() -> Result<()> {
         None,
     )
 }
+
+#[cfg(test)]
+mod ensure_mountpoint_tests {
+    use std::io;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use super::*;
+
+    /// A fresh scratch directory under the real temp dir
+    struct TempDir(PathBuf);
+
+    impl TempDir {
+        fn new() -> Self {
+            static NEXT: AtomicUsize = AtomicUsize::new(0);
+            let dir = std::env::temp_dir().join(format!(
+                "rsinit-mount-test-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            fs::create_dir_all(&dir).unwrap();
+            Self(dir)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn creates_a_missing_mountpoint() {
+        let tmp = TempDir::new();
+        let target = tmp.path().join("dev");
+        let target_str = target.to_str().unwrap();
+
+        assert!(!target.exists());
+        ensure_mountpoint(target_str).unwrap();
+        assert!(target.is_dir());
+    }
+
+    #[test]
+    fn leaves_an_existing_mountpoint_untouched() {
+        let tmp = TempDir::new();
+        let target = tmp.path().join("dev");
+        fs::create_dir(&target).unwrap();
+        fs::write(target.join("marker"), b"keep me").unwrap();
+
+        ensure_mountpoint(target.to_str().unwrap()).unwrap();
+
+        assert_eq!(fs::read(target.join("marker")).unwrap(), b"keep me");
+    }
+
+    #[test]
+    fn fails_with_a_clear_error_when_the_parent_does_not_exist() {
+        let tmp = TempDir::new();
+        let target = tmp.path().join("no-such-parent").join("dev");
+
+        let err = ensure_mountpoint(target.to_str().unwrap()).unwrap_err();
+        assert!(
+            err.to_string().contains("creating mountpoint"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn leaves_a_dangling_symlink_untouched() {
+        let tmp = TempDir::new();
+        let target = tmp.path().join("dev");
+        std::os::unix::fs::symlink(tmp.path().join("nowhere"), &target).unwrap();
+
+        ensure_mountpoint(target.to_str().unwrap()).unwrap();
+
+        assert!(fs::symlink_metadata(&target)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+    }
+
+    #[test]
+    fn is_read_only_fs_error_matches_erofs_specifically() {
+        let erofs = io::Error::from_raw_os_error(nix::libc::EROFS);
+        assert!(is_read_only_fs_error(&erofs));
+    }
+
+    #[test]
+    fn is_read_only_fs_error_rejects_other_errno_values() {
+        let eacces = io::Error::from_raw_os_error(nix::libc::EACCES);
+        assert!(!is_read_only_fs_error(&eacces));
+
+        let enospc = io::Error::from_raw_os_error(nix::libc::ENOSPC);
+        assert!(!is_read_only_fs_error(&enospc));
+    }
+}
