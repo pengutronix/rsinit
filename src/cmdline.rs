@@ -554,4 +554,39 @@ mod tests {
 
         assert_eq!(options, expected);
     }
+
+    #[test]
+    fn test_multibyte_characters_do_not_panic() {
+        let o = CmdlineOptionsParser::new()
+            .parse_string("root=/dev/é init=/sbin/日本 quiet\n")
+            .unwrap();
+        assert_eq!(o.root.as_deref(), Some("/dev/é"));
+        assert_eq!(o.init, "/sbin/日本");
+
+        for line in [
+            "é",
+            "é=é",
+            "日本語=root",
+            "root=🦀",
+            "\"é\"",
+            "a\"é",
+            "x=\"é y\" z=é\n",
+        ] {
+            let _ = CmdlineOptionsParser::new().parse_string(line);
+        }
+    }
+
+    #[test]
+    fn test_only_a_real_no_break_space_separates() {
+        let o = CmdlineOptionsParser::new()
+            .parse_string("root=/dev/\u{1a0}x init=/a\n")
+            .unwrap();
+        assert_eq!(o.root.as_deref(), Some("/dev/\u{1a0}x"));
+        // A genuine NBSP still separates
+        let o = CmdlineOptionsParser::new()
+            .parse_string("root=/dev/a\u{a0}init=/b\n")
+            .unwrap();
+        assert_eq!(o.root.as_deref(), Some("/dev/a"));
+        assert_eq!(o.init, "/b");
+    }
 }
