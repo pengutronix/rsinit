@@ -38,6 +38,33 @@ def assert_apivfs(result):
     assert "mode=755" in set(dev["super-options"])
 
 
+def assert_tmpfs_root_overlay(result, source):
+    result.assert_system_state()
+    overlay_mount = result.get_mount(mount_point="/", filesystem_type="overlay")
+    assert overlay_mount["mount-source"] == "none"
+    assert overlay_mount["filesystem-type"] == "overlay"
+    assert "rw" in overlay_mount["mount-options"]
+    super_options = dict(
+        option.split("=", 1)
+        for option in overlay_mount["super-options"]
+        if "=" in option
+    )
+    assert super_options["lowerdir"] == "/ro-root"
+    assert super_options["upperdir"] == "/rw-root/overlay"
+    assert super_options["workdir"] == "/rw-root/work"
+
+    ro_root = result.get_mount(mount_point="/ro-root")
+    assert ro_root["mount-source"] == source
+    assert ro_root["filesystem-type"] == "ext4"
+    assert "ro" in ro_root["mount-options"]
+
+    rw_root = result.get_mount(mount_point="/rw-root", filesystem_type="tmpfs")
+    assert "mode=755" in rw_root["super-options"]
+
+    assert_apivfs(result)
+    assert len(result.mountinfo) == 7
+
+
 def test_basic_ext4(genimage, qemu):
     qemu.set_initramfs(genimage.get_initramfs())
     qemu.set_diskimage(genimage.get_ext4_disk())
@@ -113,3 +140,24 @@ def test_verity(rsinit, genimage, qemu):
     assert root_mount["filesystem-type"] == "ext4"
     assert_apivfs(result)
     assert len(result.mountinfo) == 5
+
+
+def test_tmpfs_root_overlay(genimage, qemu):
+    qemu.set_initramfs(genimage.get_initramfs())
+    qemu.set_diskimage(genimage.get_ext4_disk())
+    qemu.set_cmdline("rootwait root=/dev/vda1 rw rsinit.tmpfs_root_overlay")
+    result = qemu.run()
+    assert_tmpfs_root_overlay(result, "/dev/vda1")
+
+
+def test_tmpfs_root_overlay_verity(rsinit, genimage, qemu):
+    disk, verity_params = genimage.get_ext4_verity_disk()
+    qemu.set_diskimage(disk)
+    files = {"/init": rsinit.rdinit_path, "/verity-params": verity_params}
+    qemu.set_initramfs(
+        genimage.create_initramfs_with_files("ext4-verity-overlay", files)
+    )
+    qemu.set_cmdline("rootwait rsinit.verity_root=/dev/vda1 rsinit.tmpfs_root_overlay")
+    result = qemu.run()
+    # prepare_dmverity() replaces the root device with the dm-verity mapping.
+    assert_tmpfs_root_overlay(result, "/dev/dm-0")

@@ -13,6 +13,7 @@ pub fn ensure_value<'a>(key: &str, value: Option<&'a str>) -> Result<&'a str> {
 
 #[derive(Debug, PartialEq)]
 pub struct CmdlineOptions {
+    /// Path to the device file which is mounted as root
     pub root: Option<String>,
     pub rootfstype: Option<String>,
     pub rootflags: Option<String>,
@@ -28,6 +29,20 @@ pub struct CmdlineOptions {
     ///
     /// Enabled by the `rsinit.bind_modules` cmdline flag.
     pub bind_modules: bool,
+    /// Set up a volatile tmpfs overlay for the root filesystem.
+    ///
+    /// The root filesystem is moved to `/ro-root` and remounted read-only. A
+    /// writable tmpfs is made available at `/rw-root` and used as the upper
+    /// layer. Any modifications are lost on reboot.
+    ///
+    /// ```text
+    /// / (rw overlayfs lowerdir=/ro-root upperdir=/rw-root/overlay workdir=/rw-root/work)
+    /// ├── rw-root (rw tmpfs)
+    /// └── ro-root (ro rootfs)
+    /// ```
+    ///
+    /// Enabled by the `rsinit.tmpfs_root_overlay` cmdline flag.
+    pub tmpfs_root_overlay: bool,
 }
 
 impl Default for CmdlineOptions {
@@ -42,6 +57,7 @@ impl Default for CmdlineOptions {
             init: "/sbin/init".into(),
             cleanup: true,
             bind_modules: false,
+            tmpfs_root_overlay: false,
         }
     }
 }
@@ -63,6 +79,7 @@ impl CmdlineOptions {
             "nfsroot" => self.nfsroot = Some(ensure_value(key, value)?.to_string()),
             "init" => self.init = ensure_value(key, value)?.into(),
             "rsinit.bind_modules" => self.bind_modules = true,
+            "rsinit.tmpfs_root_overlay" => self.tmpfs_root_overlay = true,
             _ => {
                 for cb in callbacks {
                     cb.call(key, value)?
@@ -541,6 +558,23 @@ mod tests {
 
         let expected = CmdlineOptions {
             root: Some("/dev/mmcblk0p1".into()),
+            ..Default::default()
+        };
+
+        let options = CmdlineOptionsParser::new()
+            .parse_string(cmdline)
+            .expect("failed");
+
+        assert_eq!(options, expected);
+    }
+
+    #[test]
+    fn test_tmpfs_root_overlay() {
+        let cmdline = "root=/dev/root rsinit.tmpfs_root_overlay\n";
+
+        let expected = CmdlineOptions {
+            root: Some("/dev/root".into()),
+            tmpfs_root_overlay: true,
             ..Default::default()
         };
 

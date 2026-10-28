@@ -29,7 +29,7 @@ use crate::integration::IntegrationLogger as Logger;
 use crate::kmsg::KmsgLogger as Logger;
 use crate::mount::{
     mount_bind_kernel_modules, mount_move, mount_move_special, mount_overlay, mount_root,
-    mount_special, mount_tmpfs_overlay,
+    mount_special,
 };
 #[cfg(feature = "systemd")]
 use crate::systemd::{mount_systemd, shutdown};
@@ -80,7 +80,8 @@ fn finalize() {
 pub enum CallBack {
     /// Executed after the initial setup (mounting special filesystems, setting up logging, and parsing cmdline).
     PostSetup,
-    /// Executed after the root filesystem has been mounted, before switching root.
+    /// Executed after the root filesystem and any configured tmpfs overlay have
+    /// been mounted, before switching root.
     PostRootMount,
     /// Executed after switching the root filesystem, before starting the next init process.
     PostSwitchRoot,
@@ -246,10 +247,6 @@ impl<'a> InitContext<'a> {
         Ok(())
     }
 
-    pub fn mount_tmpfs_root_overlay(self: &InitContext<'a>) -> Result<()> {
-        mount_tmpfs_overlay(self.options.rootfsflags, "/", self.options.root.as_deref())
-    }
-
     pub fn mount_root_overlay(
         self: &InitContext<'a>,
         data: Option<&str>,
@@ -262,6 +259,27 @@ impl<'a> InitContext<'a> {
             "/",
             self.options.root.as_deref(),
         )
+    }
+
+    /// Mount a volatile read-write tmpfs overlay on top of the root filesystem.
+    ///
+    /// The root filesystem is moved to `/ro-root` and remounted read-only. A
+    /// tmpfs is mounted at `/rw-root` and used for the overlay's upper and work
+    /// directories. Any modifications are lost on reboot. The mount structure
+    /// is:
+    ///
+    /// ```text
+    /// / (rw overlayfs lowerdir=/ro-root upperdir=/rw-root/overlay workdir=/rw-root/work)
+    /// ├── rw-root (rw tmpfs)
+    /// └── ro-root (ro rootfs)
+    /// ```
+    ///
+    /// This is done by rsinit automatically when the
+    /// `rsinit.tmpfs_root_overlay` kernel command line option is set. Custom
+    /// init implementations can call this manually after mounting the root
+    /// filesystem and before switching root.
+    pub fn mount_tmpfs_root_overlay(self: &InitContext<'a>) -> Result<()> {
+        crate::mount::mount_tmpfs_root_overlay()
     }
 
     #[allow(unreachable_code)]
@@ -348,6 +366,10 @@ impl<'a> InitContext<'a> {
         self.prepare_aux()?;
 
         self.mount_root()?;
+
+        if self.options.tmpfs_root_overlay {
+            self.mount_tmpfs_root_overlay()?;
+        }
 
         self.run_callbacks(CallBack::PostRootMount)?;
 

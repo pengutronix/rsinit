@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use log::{info, warn};
 use nix::{
-    mount::{mount, umount, MsFlags},
+    mount::{mount, MsFlags},
     sys::utsname::uname,
 };
 
@@ -164,31 +164,72 @@ pub fn mount_overlay(
     Ok(())
 }
 
-pub fn mount_tmpfs_overlay(
-    overlayflags: MsFlags,
-    mountpoint: &str,
-    name: Option<&str>,
-) -> Result<()> {
-    let dir = "/.overlay";
-
-    mkdir(dir)?;
-    do_mount(
+/// Remount `mountpoint` read-only. Only the mount flags are changed, the
+/// underlying filesystem is left untouched.
+fn remount_read_only(mountpoint: &str) -> Result<()> {
+    mount(
         Option::<&str>::None,
-        dir,
+        mountpoint,
+        Option::<&str>::None,
+        MsFlags::MS_REMOUNT | MsFlags::MS_BIND | MsFlags::MS_RDONLY,
+        Option::<&str>::None,
+    )
+    .map_err(|e| format!("Failed to remount {mountpoint} read-only: {e}"))?;
+
+    Ok(())
+}
+
+/// Mount a volatile read-write tmpfs overlay on top of the root filesystem.
+///
+/// The root filesystem is moved to `/ro-root` and remounted read-only. A tmpfs
+/// is mounted at `/rw-root` and used for the overlay's upper and work
+/// directories. Before switching root, the overlay is mounted at `/root`;
+/// afterwards the mount structure is:
+///
+/// ```text
+/// / (rw overlayfs lowerdir=/ro-root upperdir=/rw-root/overlay workdir=/rw-root/work)
+/// ├── rw-root (rw tmpfs)
+/// └── ro-root (ro rootfs)
+/// ```
+pub fn mount_tmpfs_root_overlay() -> Result<()> {
+    let root = "/root";
+    let ro_root = "/ro-root";
+    let rw_root = "/rw-root";
+
+    info!("Moving rootfs mount to {ro_root}");
+    mkdir(ro_root)?;
+    mount_move(root, ro_root, false)?;
+
+    info!("Remounting rootfs at {ro_root} read-only");
+    remount_read_only(ro_root)?;
+
+    info!("Mounting tmpfs on {rw_root}");
+    do_mount(
+        Some("tmpfs"),
+        rw_root,
         Some("tmpfs"),
         MsFlags::empty(),
         Some("mode=0755"),
     )?;
 
-    mount_overlay(
-        overlayflags,
-        Some("redirect_dir=on,index=on,metacopy=on,volatile"),
-        dir,
-        mountpoint,
-        name,
+    info!("Mounting overlayfs on {root}");
+    mkdir(&format!("{rw_root}/overlay"))?;
+    mkdir(&format!("{rw_root}/work"))?;
+    do_mount(
+        None,
+        root,
+        Some("overlay"),
+        MsFlags::empty(),
+        Some(&format!(
+            "lowerdir={ro_root},upperdir={rw_root}/overlay,workdir={rw_root}/work,redirect_dir=on"
+        )),
     )?;
-    umount(dir).map_err(|e| format!("Failed to unmount {dir}: {e}"))?;
-    remove_dir(dir)?;
+
+    info!("Moving overlay components into {root}");
+    mkdir(&format!("{root}/ro-root"))?;
+    mkdir(&format!("{root}/rw-root"))?;
+    mount_move(ro_root, &format!("{root}/ro-root"), false)?;
+    mount_move(rw_root, &format!("{root}/rw-root"), false)?;
 
     Ok(())
 }

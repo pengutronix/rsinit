@@ -66,6 +66,7 @@ Currently, the following parameters are interpreted by rsinit:
 - `nfsroot=`
 - `init=`
 - `rsinit.bind_modules`
+- `rsinit.tmpfs_root_overlay`
 
 9pfs with USB gadget transport
 ------------------------------
@@ -131,6 +132,29 @@ rsinit will refuse to bind-mount `/lib/modules` with an error if:
 1. `/lib/modules/<uname --kernel-release>` does not exist
 2. `/lib/modules/` contains files or folders which do not match the current kernel release
 
+r/w tmpfs root overlay
+----------------------
+
+With `rsinit.tmpfs_root_overlay`, rsinit sets up the root filesystem with an r/w
+tmpfs root overlay on top. This is useful for development with read-only root
+filesystems e.g. dm-verity protected root filesystems. The mount structure with
+the feature enabled will be:
+
+```
+/ (rw overlayfs lowerdir=/ro-root upperdir=/rw-root/overlay workdir=/rw-root/work)
+├── rw-root (rw tmpfs)
+└── ro-root (ro rootfs)
+```
+
+The lower rootfs is remounted read-only, even if `rw` is specified on the
+kernel command line. The overlay is mounted before `PostRootMount` callbacks
+and `rsinit.bind_modules` are handled, so both see the final root layout.
+
+The tmpfs uses the kernel default size limit (normally half of RAM). Any
+modification consumes RAM and is lost on reboot.
+
+Note that the kernel must provide overlayfs support (`CONFIG_OVERLAY_FS`).
+
 rsinit as a library
 -------------------
 
@@ -172,8 +196,8 @@ The available phases are defined in the `CallBack` enum:
 
 - `PostSetup`: Executed after the initial setup (mounting special filesystems,
   setting up logging, and parsing cmdline).
-- `PostRootMount`: Executed after the root filesystem has been mounted, before
-  switching root.
+- `PostRootMount`: Executed after the root filesystem and any configured tmpfs
+  overlay have been mounted, before switching root.
 - `PostSwitchRoot`: Executed after switching the root filesystem, before
   starting the next init process.
 

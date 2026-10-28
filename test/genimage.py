@@ -63,6 +63,9 @@ class GenImage:
     def __image_file(self, name):
         return self.__image_path / name
 
+    def __verity_params_file(self, name):
+        return self.__path / (name + "-verity.params")
+
     def __done(self, name):
         if self.__force:
             return False
@@ -165,7 +168,7 @@ image {name} {{
             encoding="utf-8",
             env=self._sbin_env(),
         ).stdout.splitlines()
-        verity_params = self.__path / (name + "-verity.params")
+        verity_params = self.__verity_params_file(name)
         with open(verity_params, "w+") as verity_config:
             for line in output:
                 try:
@@ -180,10 +183,12 @@ image {name} {{
 
     def get_ext4_verity_disk(self):
         name = "hd-ext4-verity.img"
+        root_name = "root.verity"
+        verity_params = self.__verity_params_file(root_name)
         if self.__done(name):
-            return self.__image_file(name)
-        verity_params = self._create_root_ext4_verity("root.verity")
-        self._create_disk(name, "root.verity")
+            return self.__image_file(name), verity_params
+        verity_params = self._create_root_ext4_verity(root_name)
+        self._create_disk(name, root_name)
         return self.__image_file(name), verity_params
 
 
