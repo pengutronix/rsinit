@@ -134,12 +134,15 @@ where
 #[derive(Default)]
 struct Token {
     start: Option<usize>,
-    len: usize,
+    end: usize,
 }
 
 impl Token {
     fn is_empty(&self) -> bool {
-        self.start.is_none() || self.len == 0
+        match self.start {
+            Some(s) => self.end <= s,
+            None => true,
+        }
     }
 
     fn is_started(&self) -> bool {
@@ -148,22 +151,23 @@ impl Token {
 
     fn start(&mut self, start: usize) {
         self.start = Some(start);
+        self.end = start;
     }
 
     fn reset(&mut self) {
         self.start = None;
-        self.len = 0;
+        self.end = 0;
     }
 
-    fn push(&mut self) {
-        self.len += 1;
+    /// Extend the token to just past the character `c` found at byte index `i`.
+    fn push(&mut self, i: usize, c: char) {
+        self.end = i + c.len_utf8();
     }
 
     fn range(&self) -> Range<usize> {
-        if let Some(start) = self.start {
-            start..start + self.len
-        } else {
-            0..0
+        match self.start {
+            Some(start) if self.end > start => start..self.end,
+            _ => 0..0,
         }
     }
 }
@@ -212,7 +216,7 @@ impl<'a> CmdlineOptionsParser<'a> {
                 }
                 // is_ascii_whitespace doesn't include \v which is included in
                 // isspace used by the kernel cmdline.c parser.
-                c if (c.is_ascii_whitespace() || c as u8 == b'\xa0') && !quoted => {
+                c if (c.is_ascii_whitespace() || c == '\u{a0}') && !quoted => {
                     if !key.is_empty() {
                         options.parse_option(
                             &cmdline[key.range()],
@@ -232,9 +236,9 @@ impl<'a> CmdlineOptionsParser<'a> {
                         if !key.is_started() {
                             key.start(i);
                         }
-                        key.push();
+                        key.push(i, c);
                     } else {
-                        val.push();
+                        val.push(i, c);
                     }
                 }
             }
@@ -549,5 +553,40 @@ mod tests {
             .expect("failed");
 
         assert_eq!(options, expected);
+    }
+
+    #[test]
+    fn test_multibyte_characters_do_not_panic() {
+        let o = CmdlineOptionsParser::new()
+            .parse_string("root=/dev/é init=/sbin/日本 quiet\n")
+            .unwrap();
+        assert_eq!(o.root.as_deref(), Some("/dev/é"));
+        assert_eq!(o.init, "/sbin/日本");
+
+        for line in [
+            "é",
+            "é=é",
+            "日本語=root",
+            "root=🦀",
+            "\"é\"",
+            "a\"é",
+            "x=\"é y\" z=é\n",
+        ] {
+            let _ = CmdlineOptionsParser::new().parse_string(line);
+        }
+    }
+
+    #[test]
+    fn test_only_a_real_no_break_space_separates() {
+        let o = CmdlineOptionsParser::new()
+            .parse_string("root=/dev/\u{1a0}x init=/a\n")
+            .unwrap();
+        assert_eq!(o.root.as_deref(), Some("/dev/\u{1a0}x"));
+        // A genuine NBSP still separates
+        let o = CmdlineOptionsParser::new()
+            .parse_string("root=/dev/a\u{a0}init=/b\n")
+            .unwrap();
+        assert_eq!(o.root.as_deref(), Some("/dev/a"));
+        assert_eq!(o.init, "/b");
     }
 }
