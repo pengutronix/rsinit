@@ -59,7 +59,9 @@ impl CmdlineOptions {
             "rootflags" => self.rootflags = value.map(str::to_string),
             "ro" => self.rootfsflags.insert(MsFlags::MS_RDONLY),
             "rw" => self.rootfsflags.remove(MsFlags::MS_RDONLY),
-            "rsinit.verity_root" => self.verity_root = Some(ensure_value(key, value)?.to_string()),
+            "rsinit.verity_root" | "verity_root" => {
+                self.verity_root = Some(ensure_value(key, value)?.to_string())
+            }
             "nfsroot" => self.nfsroot = Some(ensure_value(key, value)?.to_string()),
             "init" => self.init = ensure_value(key, value)?.into(),
             "rsinit.bind_modules" => self.bind_modules = true,
@@ -368,6 +370,23 @@ mod tests {
     #[test]
     fn test_verity() {
         let cmdline = "rsinit.verity_root=/dev/mmcblk0p1 rootfstype=ext4\n";
+
+        let expected = CmdlineOptions {
+            verity_root: Some("/dev/mmcblk0p1".into()),
+            rootfstype: Some("ext4".into()),
+            ..Default::default()
+        };
+
+        let options = CmdlineOptionsParser::new()
+            .parse_string(cmdline)
+            .expect("failed");
+
+        assert_eq!(options, expected);
+    }
+
+    #[test]
+    fn test_verity_alternate_syntax() {
+        let cmdline = "verity_root=/dev/mmcblk0p1 rootfstype=ext4\n";
 
         let expected = CmdlineOptions {
             verity_root: Some("/dev/mmcblk0p1".into()),
